@@ -5,7 +5,7 @@ defmodule ExSRTPTest do
   @salt "mysaltvalue123"
 
   setup do
-    srtp = ExSRTP.new(master_key: @key, master_salt: @salt, ssrc: :any_inbound)
+    srtp = ExSRTP.new(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
     {:ok, srtp: srtp}
   end
 
@@ -22,7 +22,7 @@ defmodule ExSRTPTest do
       payload: <<1, 2, 3, 4, 5>>
     }
 
-    {protected_packet, _srtp_after} = ExSRTP.protect(srtp, packet)
+    {protected_packet, _srtp_after} = ExSRTP.protect(packet, srtp)
 
     assert protected_packet ==
              <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169,
@@ -45,7 +45,7 @@ defmodule ExSRTPTest do
       }
     ]
 
-    {protected_rtcp, _srtp} = ExSRTP.protect_rtcp(srtp, packets)
+    {protected_rtcp, _srtp} = ExSRTP.protect_rtcp(packets, srtp)
 
     expected =
       <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
