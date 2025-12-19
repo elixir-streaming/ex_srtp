@@ -4,6 +4,7 @@ defmodule ExSRTP do
   """
 
   alias ExSRTP.Backend.Crypto
+  alias ExSRTP.Policy
 
   @type t :: %__MODULE__{session: any()}
 
@@ -12,9 +13,9 @@ defmodule ExSRTP do
   @doc """
   Creates a new SRTP session.
   """
-  @spec new(ExSRTP.Policy.t()) :: t()
-  def new(policy) do
-    %__MODULE__{session: Crypto.init(policy)}
+  @spec new(Policy.t()) :: t()
+  def new(%Policy{} = policy) do
+    %__MODULE__{session: Crypto.init(Policy.set_defaults(policy))}
   end
 
   @doc """
