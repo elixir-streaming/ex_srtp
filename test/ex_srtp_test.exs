@@ -6,10 +6,7 @@ defmodule ExSRTPTest do
 
   setup do
     srtp = ExSRTP.new(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
-    {:ok, srtp: srtp}
-  end
 
-  test "protect packet", %{srtp: srtp} do
     packet = %ExRTP.Packet{
       version: 2,
       padding: false,
@@ -22,7 +19,11 @@ defmodule ExSRTPTest do
       payload: <<1, 2, 3, 4, 5>>
     }
 
-    {protected_packet, _srtp_after} = ExSRTP.protect(packet, srtp)
+    {:ok, srtp: srtp, packet: packet}
+  end
+
+  test "protect packet", %{srtp: srtp, packet: packet} do
+    {protected_packet, _srtp} = ExSRTP.protect(packet, srtp)
 
     assert protected_packet ==
              <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169,
@@ -53,5 +54,14 @@ defmodule ExSRTPTest do
         211, 163, 16, 68, 176, 7, 128, 0, 0, 1, 57, 9, 25, 200, 123, 251, 29, 169, 118, 44>>
 
     assert protected_rtcp == expected
+  end
+
+  test "unprotect rtcp", %{srtp: srtp, packet: packet} do
+    protected_packet =
+      <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
+        155, 23, 74, 128, 181, 142, 45>>
+
+    assert {:ok, unprotected_packet, _srtp} = ExSRTP.unprotect(protected_packet, srtp)
+    assert unprotected_packet == packet
   end
 end

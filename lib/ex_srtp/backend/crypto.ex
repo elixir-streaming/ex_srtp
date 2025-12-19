@@ -18,7 +18,8 @@ defmodule ExSRTP.Backend.Crypto do
           rtcp_session_key: binary() | nil,
           rtcp_auth_key: binary() | nil,
           rtcp_salt: binary() | nil,
-          out_contexts: %{non_neg_integer() => Context.t()}
+          out_contexts: %{non_neg_integer() => Context.t()},
+          in_contexts: %{non_neg_integer() => Context.t()}
         }
 
   defstruct [
@@ -30,7 +31,8 @@ defmodule ExSRTP.Backend.Crypto do
     :rtcp_salt,
     :rtp_profile,
     :rtcp_profile,
-    out_contexts: %{}
+    out_contexts: %{},
+    in_contexts: %{}
   ]
 
   @impl true
@@ -74,6 +76,34 @@ defmodule ExSRTP.Backend.Crypto do
     }
 
     {data, session}
+  end
+
+  @impl true
+  def unprotect(data, session) do
+    with {:ok, packet} <- ExRTP.Packet.decode(data),
+         ctx <- get_in_ctx(session, packet.ssrc),
+         {roc, ctx} <- Context.estimate_roc(ctx, packet.sequence_number),
+         :ok <- authenticate(session, roc, data) do
+      <<encrypted_data::binary-size(byte_size(packet.payload) - 10), _tag::binary>> =
+        packet.payload
+
+      iv = bxor(ctx.base_iv, (roc <<< 16 ||| packet.sequence_number) <<< 16)
+
+      decrypted_data =
+        :crypto.crypto_one_time(
+          :aes_128_ctr,
+          session.rtp_session_key,
+          <<iv::128>>,
+          encrypted_data,
+          encrypt: false
+        )
+
+      {:ok, %{packet | payload: decrypted_data},
+       %{
+         session
+         | in_contexts: Map.put(session.in_contexts, packet.ssrc, ctx)
+       }}
+    end
   end
 
   defp derive_rtp_keys(session, %{master_key: key} = policy) do
@@ -124,18 +154,28 @@ defmodule ExSRTP.Backend.Crypto do
     Context.new(ssrc, session.rtp_salt, session.rtcp_salt)
   end
 
+  defp get_in_ctx(%{in_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
+    contexts[ssrc]
+  end
+
+  defp get_in_ctx(session, ssrc) do
+    Context.new(ssrc, session.rtp_salt, session.rtcp_salt)
+  end
+
   defp do_protect(%{rtp_profile: :aes_cm_128_hmac_sha1_80} = session, header, payload, iv, roc) do
     payload =
       :crypto.crypto_one_time(:aes_128_ctr, session.rtp_session_key, <<iv::128>>, payload,
         encrypt: true
       )
 
-    full_packet = <<header::binary, payload::binary>>
-
     auth_tag =
-      :crypto.macN(:hmac, :sha, session.rtp_auth_key, <<full_packet::binary, roc::32>>, 10)
+      :crypto.mac_init(:hmac, :sha, session.rtp_auth_key)
+      |> :crypto.mac_update(header)
+      |> :crypto.mac_update(payload)
+      |> :crypto.mac_update(<<roc::32>>)
+      |> :crypto.mac_finalN(10)
 
-    <<full_packet::binary, auth_tag::binary>>
+    <<header::binary, payload::binary, auth_tag::binary>>
   end
 
   defp do_protect_rtcp(%{rtcp_profile: :aes_cm_128_hmac_sha1_80} = session, data, iv, rtcp_idx) do
@@ -151,6 +191,36 @@ defmodule ExSRTP.Backend.Crypto do
     <<rtcp_packet::binary, auth_tag::binary>>
   end
 
+  defp authenticate(%{rtp_profile: :aes_cm_128_hmac_sha1_80} = session, roc, data) do
+    tag_size = 10
+    <<encrypted_data::binary-size(byte_size(data) - tag_size), tag::binary>> = data
+
+    new_tag =
+      :crypto.macN(
+        :hmac,
+        :sha,
+        session.rtp_auth_key,
+        <<encrypted_data::binary, roc::32>>,
+        tag_size
+      )
+
+    if tag == new_tag, do: :ok, else: {:error, :auth_failed}
+  end
+
   defp key_sizes(:aes_cm_128_hmac_sha1_80), do: {128, 160, 112}
   defp key_sizes(_), do: raise("Unsupported SRTP profile")
+
+  defimpl Inspect do
+    import Inspect.Algebra
+
+    def inspect(%ExSRTP.Backend.Crypto{} = session, _opts) do
+      concat([
+        "#ExSRTP.Backend.Crypto<",
+        "rtp_profile: #{inspect(session.rtp_profile)}, ",
+        "rtcp_profile: #{inspect(session.rtcp_profile)}, ",
+        "out_contexts: #{map_size(session.out_contexts)} contexts",
+        ">"
+      ])
+    end
+  end
 end

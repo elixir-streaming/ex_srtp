@@ -36,18 +36,22 @@ defmodule ExSRTP do
     {protected_packet, %{srtp | session: session}}
   end
 
-  # defimpl Inspect do
-  #   import Inspect.Algebra
+  @doc """
+  Unprotects (decrypts and verifies) an RTP packet.
+  """
+  @spec unprotect(binary(), t()) :: {:ok, ExRTP.Packet.t(), t()} | {:error, term()}
+  def unprotect(data, srtp) do
+    case Crypto.unprotect(data, srtp.session) do
+      {:ok, packet, session} -> {:ok, packet, %{srtp | session: session}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-  #   def inspect(srtp, _opts) do
-  #     concat([
-  #       "#ExSRTP<ssrc: #{srtp.ssrc}",
-  #       ", rtp: ",
-  #       "#{srtp.rtp}",
-  #       ", rtcp: ",
-  #       "#{srtp.rtcp}",
-  #       ">"
-  #     ])
-  #   end
-  # end
+  defimpl Inspect do
+    import Inspect.Algebra
+
+    def inspect(srtp, _opts) do
+      concat(["#ExSRTP<session: ", to_doc(srtp.session, %Inspect.Opts{}), ">"])
+    end
+  end
 end
