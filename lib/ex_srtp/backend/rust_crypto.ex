@@ -28,15 +28,22 @@ defmodule ExSRTP.Backend.RustCrypto do
     payload_len = byte_size(packet.payload)
     packet = ExRTP.Packet.encode(packet)
 
-    Native.protect(
-      session,
-      binary_part(packet, 0, byte_size(packet) - payload_len),
-      binary_part(packet, byte_size(packet) - payload_len, payload_len)
-    )
+    encryped_data =
+      Native.protect(
+        session,
+        binary_part(packet, 0, byte_size(packet) - payload_len),
+        binary_part(packet, byte_size(packet) - payload_len, payload_len)
+      )
+
+    {:ok, encryped_data, session}
   end
 
   @impl ExSRTP.Backend
   def protect_rtcp(packets, session) do
     {:ok, Native.protect_rtcp(session, CompoundPacket.encode(packets)), session}
+  end
+
+  @impl ExSRTP.Backend
+  def unprotect(protected_packet, session) do
   end
 end

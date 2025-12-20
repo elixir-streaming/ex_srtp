@@ -58,7 +58,9 @@ impl RTPContext {
         iv[0..self.salt.len()].copy_from_slice(&self.salt);
         for i in 0..4 {
             iv[i + 4] ^= header[8 + i];
-            iv[i + 10] ^= index_bytes[i];
+        }
+        for i in 0..6 {
+            iv[i + 8] ^= index_bytes[i + 2];
         }
 
         Aes128Ctr::new(self.session_key.as_slice().into(), iv.as_slice().into())

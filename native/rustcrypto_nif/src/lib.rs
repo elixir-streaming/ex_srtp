@@ -59,7 +59,6 @@ fn protect<'a>(
 #[rustler::nif]
 fn protect_rtcp<'a>(env: Env<'a>, state: ResourceArc<State>, data: Binary<'a>) -> Binary<'a> {
     let owned = state.rtcp_context.lock().unwrap().protect(&data.as_slice());
-
     return Binary::from_owned(owned, env);
 }
 
