@@ -19,3 +19,21 @@ pub(crate) fn aes_cm_key_derivation(
     Aes128Ctr::new(master_key.into(), iv.as_slice().into()).apply_keystream(out.as_mut_slice());
     return out;
 }
+
+pub(crate) fn generate_counter(roc: u32, seq_number: u16, ssrc: u32, salt: &[u8]) -> [u8; 16] {
+    let mut counter = [0; 16];
+
+    let ssrc_be = ssrc.to_be_bytes();
+    let roc_be = roc.to_be_bytes();
+    let seq_be = ((seq_number as u32) << 16).to_be_bytes();
+
+    counter[4..8].copy_from_slice(&ssrc_be);
+    counter[8..12].copy_from_slice(&roc_be);
+    counter[12..16].copy_from_slice(&seq_be);
+
+    for i in 0..salt.len() {
+        counter[i] ^= salt[i];
+    }
+
+    counter
+}

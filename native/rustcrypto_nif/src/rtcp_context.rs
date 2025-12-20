@@ -9,7 +9,7 @@ pub(crate) struct RTCPContext {
     pub session_key: Vec<u8>,
     pub auth_key: Vec<u8>,
     pub salt: Vec<u8>,
-    pub out_ssrcs: std::collections::HashMap<u32, SsrcContext>,
+    out_ssrcs: std::collections::HashMap<u32, SsrcContext>,
 }
 
 struct SsrcContext {

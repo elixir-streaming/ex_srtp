@@ -62,4 +62,21 @@ fn protect_rtcp<'a>(env: Env<'a>, state: ResourceArc<State>, data: Binary<'a>) -
     return Binary::from_owned(owned, env);
 }
 
+#[rustler::nif]
+fn unprotect<'a>(
+    env: Env<'a>,
+    state: ResourceArc<State>,
+    header: Binary<'a>,
+    payload: Binary<'a>,
+) -> Result<Binary<'a>, String> {
+    let owned = state
+        .rtp_context
+        .lock()
+        .unwrap()
+        .unprotect(&header.as_slice(), &payload.as_slice())
+        .map_err(|e| e.to_string())?;
+
+    return Ok(Binary::from_owned(owned, env));
+}
+
 rustler::init!("Elixir.ExSRTP.Backend.RustCrypto.Native", load = load);

@@ -1,11 +1,15 @@
 defmodule ExSRTPTest do
   use ExUnit.Case, async: true
 
+  alias ExSRTP.Backend.RustCrypto
+
   @key "mysecretkey12345"
   @salt "mysaltvalue123"
 
   setup do
     srtp = ExSRTP.new!(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
+
+    {:ok, rust_srtp} = RustCrypto.init(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
 
     packet = %ExRTP.Packet{
       version: 2,
@@ -31,7 +35,7 @@ defmodule ExSRTPTest do
       %ExRTCP.Packet.Goodbye{sources: [0x89A1FF87]}
     ]
 
-    {:ok, srtp: srtp, packet: packet, compound_packet: compound_packet}
+    {:ok, srtp: srtp, rust_srtp: rust_srtp, packet: packet, compound_packet: compound_packet}
   end
 
   describe "new" do
@@ -50,25 +54,46 @@ defmodule ExSRTPTest do
     end
   end
 
-  test "protect packet", %{srtp: srtp, packet: packet} do
-    assert {:ok, _, _srtp} = ExSRTP.protect(packet, srtp)
-    assert {protected_packet, _srtp} = ExSRTP.protect!(packet, srtp)
+  describe "protect packet" do
+    test "Erlang backend", %{srtp: srtp, packet: packet} do
+      expected =
+        <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
+          155, 23, 74, 128, 181, 142, 45>>
 
-    assert IO.iodata_to_binary(protected_packet) ==
-             <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169,
-               172, 155, 23, 74, 128, 181, 142, 45>>
+      assert {:ok, ^expected, _srtp} = ExSRTP.protect(packet, srtp)
+      assert {^expected, _srtp} = ExSRTP.protect!(packet, srtp)
+    end
+
+    test "Rust backend", %{rust_srtp: srtp, packet: packet} do
+      expectedd ==
+        <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
+          155, 23, 74, 128, 181, 142, 45>>
+
+      assert {:ok, ^expected, _srtp} = RustCrypto.protect(packet, srtp)
+      assert {^expectedd, _srtp} = RustCrypto.protect!(packet, srtp)
+    end
   end
 
-  test "protect rtcp", %{srtp: srtp, compound_packet: compound_packet} do
-    assert {:ok, _, _srtp} = ExSRTP.protect_rtcp(compound_packet, srtp)
-    assert {protected_rtcp, _srtp} = ExSRTP.protect_rtcp!(compound_packet, srtp)
+  describe "protect rtcp" do
+    test "Erlnag backend", %{srtp: srtp, compound_packet: compound_packet} do
+      expected =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
 
-    expected =
-      <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
-        156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
-        139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
+      assert {:ok, ^expected, _srtp} = ExSRTP.protect_rtcp(compound_packet, srtp)
+      assert {^expected, _srtp} = ExSRTP.protect_rtcp!(compound_packet, srtp)
+    end
 
-    assert protected_rtcp == expected
+    test "Rust backend", %{rust_srtp: srtp, compound_packet: compound_packet} do
+      expected =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
+
+      assert {:ok, ^expected, _srtp} = RustCrypto.protect_rtcp(compound_packet, srtp)
+      assert {^expected, _srtp} = RustCrypto.protect_rtcp(compound_packet, srtp)
+    end
   end
 
   describe "unprotect rtp" do
@@ -92,6 +117,14 @@ defmodule ExSRTPTest do
       assert_raise RuntimeError, "Failed to unprotect RTP packet: :replay", fn ->
         ExSRTP.unprotect!(protected_packet, srtp)
       end
+    end
+
+    test "unprotect rtp with rust backend", %{rust_srtp: srtp, packet: packet} do
+      protected_packet =
+        <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
+          155, 23, 74, 128, 181, 142, 45>>
+
+      assert {:ok, ^packet, _srtp} = RustCrypto.unprotect(protected_packet, srtp)
     end
   end
 

@@ -1,10 +1,13 @@
-use std::collections::HashMap;
+use std::{cmp::max, collections::HashMap};
 
 use aes::cipher::{KeyIvInit, StreamCipher};
 use hmac::Mac;
 use rustler::{Atom, OwnedBinary};
 
-use crate::{key_derivation::aes_cm_key_derivation, Aes128Ctr, HmacSha1, SrtpPolicy};
+use crate::{
+    key_derivation::{aes_cm_key_derivation, generate_counter},
+    Aes128Ctr, HmacSha1, SrtpPolicy,
+};
 
 pub(crate) struct RTPContext {
     pub profile: Atom,
@@ -12,11 +15,13 @@ pub(crate) struct RTPContext {
     pub auth_key: Vec<u8>,
     pub salt: Vec<u8>,
     out_ssrcs: std::collections::HashMap<u32, SsrcContext>,
+    in_ssrcs: std::collections::HashMap<u32, SsrcContext>,
 }
 
 struct SsrcContext {
     pub roc: u32,
     pub last_seq: u16,
+    pub s_l: Option<u16>,
 }
 
 impl RTPContext {
@@ -27,6 +32,7 @@ impl RTPContext {
         return RTPContext {
             profile: policy.rtp_profile,
             out_ssrcs: HashMap::new(),
+            in_ssrcs: HashMap::new(),
             session_key: aes_cm_key_derivation(master_key, master_salt, 0x0, 16),
             auth_key: aes_cm_key_derivation(master_key, master_salt, 0x1, 20),
             salt: aes_cm_key_derivation(master_key, master_salt, 0x2, 14),
@@ -52,29 +58,61 @@ impl RTPContext {
 
         ctx.inc_roc(seq);
 
-        let mut iv = vec![0u8; 16];
-        let index_bytes = ctx.index(seq).to_be_bytes();
-
-        iv[0..self.salt.len()].copy_from_slice(&self.salt);
-        for i in 0..4 {
-            iv[i + 4] ^= header[8 + i];
-        }
-        for i in 0..6 {
-            iv[i + 8] ^= index_bytes[i + 2];
-        }
-
+        let iv = generate_counter(ctx.roc, seq, ssrc, &self.salt);
         Aes128Ctr::new(self.session_key.as_slice().into(), iv.as_slice().into())
             .apply_keystream(&mut owned.as_mut_slice()[header_size..header_size + payload_size]);
 
-        let mut mac = HmacSha1::new_from_slice(self.auth_key.as_slice()).unwrap();
-        mac.update(header);
-        mac.update(&owned.as_slice()[header_size..header_size + payload_size]);
-        mac.update(ctx.roc.to_be_bytes().as_ref());
+        let roc = ctx.roc;
+        let auth_tag = self.calculate_auth_tag(&[
+            &header,
+            &owned.as_slice()[header_size..header_size + payload_size],
+            &roc.to_be_bytes(),
+        ]);
 
-        owned.as_mut_slice()[header_size + payload_size..size]
-            .copy_from_slice(&mac.finalize().into_bytes()[..10]);
-
+        owned.as_mut_slice()[header_size + payload_size..size].copy_from_slice(auth_tag.as_slice());
         return owned;
+    }
+
+    pub fn unprotect(&mut self, header: &[u8], payload: &[u8]) -> Result<OwnedBinary, String> {
+        let ssrc = u32::from_be_bytes(header[8..12].try_into().unwrap());
+        let seq = u16::from_be_bytes(header[2..4].try_into().unwrap());
+        let tag_size = 10;
+
+        let ctx = self
+            .in_ssrcs
+            .entry(ssrc)
+            .or_insert_with(|| SsrcContext::new());
+
+        let roc = ctx.estimate_roc(seq);
+
+        // authentication
+        let (encrypted_data, tag) = payload.split_at(payload.len() - tag_size);
+        let expected_tag =
+            self.calculate_auth_tag(&[&header[..], &encrypted_data[..], &roc.to_be_bytes()[..]]);
+
+        if expected_tag != tag[..] {
+            return Err("Authentication failed".to_string());
+        }
+
+        let mut owned = OwnedBinary::new(encrypted_data.len()).unwrap();
+        owned.as_mut_slice().copy_from_slice(encrypted_data);
+
+        // decryption
+        let iv = generate_counter(roc, seq, ssrc, &self.salt);
+        Aes128Ctr::new(self.session_key.as_slice().into(), iv.as_slice().into())
+            .apply_keystream(&mut owned.as_mut_slice());
+
+        Ok(owned)
+    }
+
+    fn calculate_auth_tag(&self, data: &[&[u8]]) -> Vec<u8> {
+        let tag_size = 10;
+
+        let mut mac = HmacSha1::new_from_slice(self.auth_key.as_slice()).unwrap();
+        for chunk in data {
+            mac.update(chunk);
+        }
+        return mac.finalize().into_bytes()[0..tag_size].to_vec();
     }
 }
 
@@ -83,6 +121,7 @@ impl SsrcContext {
         return SsrcContext {
             roc: 0,
             last_seq: 0,
+            s_l: None,
         };
     }
 
@@ -93,7 +132,33 @@ impl SsrcContext {
         self.last_seq = seq;
     }
 
-    pub fn index(&self, seq_number: u16) -> u64 {
-        return (self.roc as u64) << 16 | (seq_number as u64);
+    pub fn estimate_roc(&mut self, seq_number: u16) -> u32 {
+        let s_l = match self.s_l {
+            Some(s_l) => s_l,
+            None => {
+                self.s_l = Some(seq_number);
+                return self.roc;
+            }
+        };
+
+        let mut roc = self.roc;
+
+        if s_l < 32_768 {
+            if seq_number - s_l > 32_768 {
+                roc = roc.wrapping_sub(1);
+            } else {
+                self.s_l = Some(max(s_l, seq_number));
+            }
+        } else {
+            if s_l - 32_768 > seq_number {
+                roc = roc.wrapping_add(1);
+                self.roc = roc;
+                self.s_l = Some(seq_number);
+            } else {
+                self.s_l = Some(max(s_l, seq_number));
+            }
+        }
+
+        return roc;
     }
 }
