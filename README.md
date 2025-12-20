@@ -4,8 +4,10 @@
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/ex_srtp/)
 
 Elixir implementation of Secure Real-time Transport Protocol (SRTP) and
-Secure Real-time Transport Control Protocol (SRTCP) as defined in
-[RFC 3711](https://tools.ietf.org/html/rfc3711).
+Secure Real-time Transport Control Protocol (SRTCP).
+
+It implements the following references:
+* [RFC 3711 - The Secure Real-time Transport Protocol (SRTP)](https://tools.ietf.org/html/rfc3711).
 
 ## Installation
 

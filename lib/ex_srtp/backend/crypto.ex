@@ -46,6 +46,7 @@ defmodule ExSRTP.Backend.Crypto do
     session
     |> derive_rtp_keys(policy)
     |> derive_rtcp_keys(policy)
+    |> then(&{:ok, &1})
   end
 
   @impl true
@@ -58,7 +59,8 @@ defmodule ExSRTP.Backend.Crypto do
     header = ExRTP.Packet.encode(%{packet | payload: <<>>})
 
     packet = do_protect(session, header, packet.payload, iv, ctx.roc)
-    {packet, %{session | out_contexts: Map.put(session.out_contexts, ssrc, ctx)}}
+    session = %{session | out_contexts: Map.put(session.out_contexts, ssrc, ctx)}
+    {:ok, packet, session}
   end
 
   @impl true
@@ -76,7 +78,7 @@ defmodule ExSRTP.Backend.Crypto do
       | out_contexts: Map.put(session.out_contexts, ssrc, Context.inc_rtcp_index(ctx))
     }
 
-    {data, session}
+    {:ok, data, session}
   end
 
   @impl true
