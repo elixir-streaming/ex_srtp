@@ -47,6 +47,17 @@ defmodule ExSRTP do
     end
   end
 
+  @doc """
+  Unprotects (decrypts and verifies) RTCP packets.
+  """
+  @spec unprotect_rtcp(binary(), t()) :: {:ok, [ExRTCP.Packet.packet()], t()} | {:error, term()}
+  def unprotect_rtcp(data, srtp) do
+    case Crypto.unprotect_rtcp(data, srtp.session) do
+      {:ok, packets, session} -> {:ok, packets, %{srtp | session: session}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defimpl Inspect do
     import Inspect.Algebra
 

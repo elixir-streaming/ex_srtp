@@ -24,4 +24,10 @@ defmodule ExSRTP.Backend do
   Unprotects a protected RTP packet, returning the unprotected packet and updated state.
   """
   @callback unprotect(binary(), state()) :: {:ok, ExRTP.Packet.t(), state()} | {:error, term()}
+
+  @doc """
+  Unprotects a protected RTCP compound packet, returning the unprotected packets and updated state.
+  """
+  @callback unprotect_rtcp(binary(), state()) ::
+              {:ok, [ExRTCP.Packet.t()], state()} | {:error, term()}
 end

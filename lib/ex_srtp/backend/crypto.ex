@@ -7,6 +7,7 @@ defmodule ExSRTP.Backend.Crypto do
 
   import Bitwise
 
+  alias ExRTCP.CompoundPacket
   alias ExSRTP.Context
 
   @type t :: %__MODULE__{
@@ -103,6 +104,17 @@ defmodule ExSRTP.Backend.Crypto do
          session
          | in_contexts: Map.put(session.in_contexts, packet.ssrc, ctx)
        }}
+    end
+  end
+
+  @impl true
+  def unprotect_rtcp(<<header::32, ssrc::32, _::binary>> = data, session) do
+    ctx = get_in_ctx(session, ssrc)
+
+    with {:ok, encrypted_data, e, index} <- authenticate_rtcp(session, data),
+         payload <- do_unprotect_rtcp(session, e, index, ctx.rtcp_base_iv, encrypted_data),
+         {:ok, packets} <- CompoundPacket.decode(<<header::32, ssrc::32, payload::binary>>) do
+      {:ok, packets, session}
     end
   end
 
@@ -205,6 +217,36 @@ defmodule ExSRTP.Backend.Crypto do
       )
 
     if tag == new_tag, do: :ok, else: {:error, :auth_failed}
+  end
+
+  defp authenticate_rtcp(session, data) do
+    tag_size = 10
+
+    <<rtcp_data::binary-size(byte_size(data) - tag_size - 4), e::1, index::31, tag::binary>> =
+      data
+
+    new_tag =
+      :crypto.mac_init(:hmac, :sha, session.rtcp_auth_key)
+      |> :crypto.mac_update(rtcp_data)
+      |> :crypto.mac_update(<<e::1, index::31>>)
+      |> :crypto.mac_finalN(tag_size)
+
+    encrypted_data = binary_part(rtcp_data, 8, byte_size(rtcp_data) - 8)
+    if tag == new_tag, do: {:ok, encrypted_data, e, index}, else: {:error, :auth_failed}
+  end
+
+  defp do_unprotect_rtcp(_session, 0, _index, _base_iv, data), do: data
+
+  defp do_unprotect_rtcp(session, _e, index, base_iv, data) do
+    iv = bxor(base_iv, index <<< 16)
+
+    :crypto.crypto_one_time(
+      :aes_128_ctr,
+      session.rtcp_session_key,
+      <<iv::128>>,
+      data,
+      encrypt: false
+    )
   end
 
   defp key_sizes(:aes_cm_128_hmac_sha1_80), do: {128, 160, 112}
