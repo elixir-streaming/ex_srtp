@@ -10,6 +10,8 @@ defmodule ExSRTP.Backend.RustCrypto.Native do
   def protect_rtcp(_session, _data), do: :erlang.nif_error(:nif_not_loaded)
 
   def unprotect(_session, _header, _payload), do: :erlang.nif_error(:nif_not_loaded)
+
+  def unprotect_rtcp(_session, _data), do: :erlang.nif_error(:nif_not_loaded)
 end
 
 defmodule ExSRTP.Backend.RustCrypto do
@@ -60,6 +62,20 @@ defmodule ExSRTP.Backend.RustCrypto do
         {:error, reason} ->
           {:error, reason}
       end
+    end
+  end
+
+  @impl ExSRTP.Backend
+  def unprotect_rtcp(protected_packet, session) do
+    case Native.unprotect_rtcp(session, protected_packet) do
+      {:ok, unprotected_data} ->
+        case CompoundPacket.decode(unprotected_data) do
+          {:ok, packets} -> {:ok, packets, session}
+          {:error, reason} -> {:error, reason}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 end

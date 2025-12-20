@@ -166,6 +166,30 @@ defmodule ExSRTPTest do
     end
   end
 
+  describe "unprotect rtcp" do
+    test "unprotect rtcp", %{srtp: srtp, compound_packet: packets} do
+      protected_rtcp =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
+
+      assert {:ok, unprotected_packets, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+      assert unprotected_packets == packets
+    end
+
+    test "unprotect rtcp with rust backend", %{rust_srtp: srtp, compound_packet: packets} do
+      protected_rtcp =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
+
+      assert {:ok, unprotected_packets, _srtp} =
+               ExSRTP.Backend.RustCrypto.unprotect_rtcp(protected_rtcp, srtp)
+
+      assert unprotected_packets == packets
+    end
+  end
+
   for profile <- [:aes_cm_128_hmac_sha1_80, :aes_cm_128_hmac_sha1_32] do
     describe "Protect/unprotect: #{profile}" do
       setup do
