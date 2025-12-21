@@ -4,7 +4,7 @@ defmodule ExSRTP.Backend do
   """
 
   @type state :: term()
-  @type protect_return :: {:ok, binary(), state()} | {:error, term()}
+  @type protect_return :: {:ok, iodata(), state()} | {:error, term()}
 
   @doc """
   Initializes the SRTP backend state based on the given policy.

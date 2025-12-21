@@ -178,13 +178,15 @@ defmodule ExSRTP.Backend.Crypto do
       )
 
     auth_tag =
-      :crypto.mac_init(:hmac, :sha, session.rtp_auth_key)
-      |> :crypto.mac_update(header)
-      |> :crypto.mac_update(payload)
-      |> :crypto.mac_update(<<roc::32>>)
-      |> :crypto.mac_finalN(tag_size)
+      :crypto.macN(
+        :hmac,
+        :sha,
+        session.rtp_auth_key,
+        [header, payload, <<roc::32>>],
+        tag_size
+      )
 
-    <<header::binary, payload::binary, auth_tag::binary>>
+    [header, payload, auth_tag]
   end
 
   defp do_protect_rtcp(session, data, iv, rtcp_idx) do

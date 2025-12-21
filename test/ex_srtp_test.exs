@@ -37,7 +37,7 @@ defmodule ExSRTPTest do
   test "protect packet", %{srtp: srtp, packet: packet} do
     assert {:ok, protected_packet, _srtp} = ExSRTP.protect(packet, srtp)
 
-    assert protected_packet ==
+    assert IO.iodata_to_binary(protected_packet) ==
              <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169,
                172, 155, 23, 74, 128, 181, 142, 45>>
   end
@@ -102,6 +102,7 @@ defmodule ExSRTPTest do
       test "protect and unprotect", %{srtp: srtp} do
         original_packets = packets(10000)
         {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
+        encrypted_packets = Enum.map(encrypted_packets, &IO.iodata_to_binary/1)
 
         original_packets
         |> Enum.zip(encrypted_packets)
@@ -115,6 +116,7 @@ defmodule ExSRTPTest do
       test "protect and unprotect out of order", %{srtp: srtp} do
         original_packets = packets(32_000)
         {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
+        encrypted_packets = Enum.map(encrypted_packets, &IO.iodata_to_binary/1)
 
         # keep the first packet in order to invalid initial ROC value
         [first_packet | original_packets] = original_packets
