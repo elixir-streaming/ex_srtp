@@ -84,4 +84,65 @@ defmodule ExSRTPTest do
 
     assert unprotected_packets == expected_packets
   end
+
+  describe "Protect/unprotect" do
+    test "protect and unprotect", %{srtp: srtp} do
+      original_packets = packets(10000)
+      {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
+
+      original_packets
+      |> Enum.zip(encrypted_packets)
+      |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
+        {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
+        assert unprotected_packet == original_packet
+        srtp
+      end)
+    end
+
+    test "protect and unprotect out of order", %{srtp: srtp} do
+      original_packets = packets(32_000)
+      {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
+
+      # keep the first packet in order to invalid initial ROC value
+      [first_packet | original_packets] = original_packets
+      [first_encrypted | encrypted_packets] = encrypted_packets
+      shuffled = original_packets |> Enum.zip(encrypted_packets) |> Enum.shuffle()
+
+      [{first_packet, first_encrypted} | shuffled]
+      |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
+        {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
+        assert unprotected_packet == original_packet
+        srtp
+      end)
+    end
+  end
+
+  defp packets(size) do
+    packet = %ExRTP.Packet{
+      version: 2,
+      padding: false,
+      extension: false,
+      marker: false,
+      payload_type: 96,
+      sequence_number: :rand.uniform(65_535),
+      timestamp: 123_456,
+      ssrc: 0x89A1FF87,
+      payload: rand_payload()
+    }
+
+    Stream.iterate(packet, fn packet ->
+      %ExRTP.Packet{
+        packet
+        | sequence_number: rem(packet.sequence_number + 1, 65_536),
+          timestamp: packet.timestamp + 3000,
+          payload: rand_payload()
+      }
+    end)
+    |> Enum.take(size)
+  end
+
+  defp rand_payload() do
+    len = :rand.uniform(1000) + 500
+    :crypto.strong_rand_bytes(len)
+  end
 end

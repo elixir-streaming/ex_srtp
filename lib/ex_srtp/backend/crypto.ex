@@ -51,7 +51,7 @@ defmodule ExSRTP.Backend.Crypto do
 
   @impl true
   def protect(%{ssrc: ssrc} = packet, session) do
-    ctx = session |> get_out_ctx(packet.ssrc) |> Context.inc_roc(packet)
+    ctx = session |> get_out_ctx(packet.ssrc) |> Context.inc_roc(packet.sequence_number)
 
     idx = ctx.roc <<< 16 ||| packet.sequence_number
     iv = bxor(ctx.base_iv, idx <<< 16)
@@ -123,12 +123,13 @@ defmodule ExSRTP.Backend.Crypto do
   defp derive_rtp_keys(session, %{master_key: key} = policy) do
     <<prefix::binary-size(7), byte::8, suffix::binary-size(6)>> = policy.master_salt
 
+    master_iv = <<prefix::binary, bxor(0, byte), suffix::binary, 0::16>>
     auth_iv = <<prefix::binary, bxor(1, byte), suffix::binary, 0::16>>
     salt_iv = <<prefix::binary, bxor(2, byte), suffix::binary, 0::16>>
 
     {cipher_key, auth_key, salt} = key_sizes(policy.rtp_profile)
 
-    cipher_key = aes_128_ctr_encrypt(key, <<policy.master_salt::binary, 0::16>>, cipher_key)
+    cipher_key = aes_128_ctr_encrypt(key, master_iv, cipher_key)
     auth_key = aes_128_ctr_encrypt(key, auth_iv, auth_key)
     cipher_salt = aes_128_ctr_encrypt(key, salt_iv, salt)
 

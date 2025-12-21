@@ -62,7 +62,7 @@ defmodule ExSRTP.Context do
     cond do
       seq_number - s_l <= 32_768 -> {ctx.roc, %{ctx | s_l: max(s_l, seq_number)}}
       ctx.roc == 0 -> {@max_roc - 1, ctx}
-      true -> {ctx.roc, %{ctx | s_l: max(s_l, seq_number)}}
+      true -> {ctx.roc - 1, ctx}
     end
   end
 

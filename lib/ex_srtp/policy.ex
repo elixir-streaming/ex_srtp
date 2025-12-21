@@ -15,6 +15,14 @@ defmodule ExSRTP.Policy do
   @enforce_keys [:master_key]
   defstruct @enforce_keys ++ [:master_salt, :rtp_profile, :rtcp_profile]
 
+  @spec new(master_key :: binary(), master_salt :: binary()) :: t()
+  def new(master_key, master_salt \\ <<0::96>>) do
+    %__MODULE__{
+      master_key: master_key,
+      master_salt: master_salt
+    }
+  end
+
   @doc false
   def set_defaults(%__MODULE__{} = policy) do
     %{

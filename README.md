@@ -16,7 +16,7 @@ The package can be installed by adding `ex_srtp` to your list of dependencies in
 ```elixir
 def deps do
   [
-    {:ex_srtp, "~> 0.1.0"}
+    {:ex_srtp, "~> 0.1.1"}
   ]
 end
 ```
