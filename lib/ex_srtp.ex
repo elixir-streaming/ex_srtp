@@ -16,12 +16,11 @@ defmodule ExSRTP do
   """
   @spec new(Policy.t()) :: {:ok, t()} | {:error, term()}
   def new(%Policy{} = policy) do
-    case backend().init(Policy.set_defaults(policy)) do
-      {:ok, session} ->
-        {:ok, %__MODULE__{session: session}}
+    policy = Policy.set_defaults(policy)
 
-      {:error, reason} ->
-        {:error, reason}
+    with :ok <- Policy.validate(policy),
+         {:ok, session} <- backend().init(policy) do
+      {:ok, %__MODULE__{session: session}}
     end
   end
 

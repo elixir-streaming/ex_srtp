@@ -10,6 +10,13 @@ defmodule ExSRTP.Backend.Crypto do
   alias ExRTCP.CompoundPacket
   alias ExSRTP.Context
 
+  @rtp_session_key_label 0
+  @rtp_auth_key_label 1
+  @rtp_salt_label 2
+  @rtcp_session_key_label 3
+  @rtcp_auth_key_label 4
+  @rtcp_salt_label 5
+
   @type t :: %__MODULE__{
           rtp_profile: ExSRTP.Policy.profile(),
           rtcp_profile: ExSRTP.Policy.profile(),
@@ -120,45 +127,28 @@ defmodule ExSRTP.Backend.Crypto do
     end
   end
 
-  defp derive_rtp_keys(session, %{master_key: key} = policy) do
-    <<prefix::binary-size(7), byte::8, suffix::binary-size(6)>> = policy.master_salt
-
-    master_iv = <<prefix::binary, bxor(0, byte), suffix::binary, 0::16>>
-    auth_iv = <<prefix::binary, bxor(1, byte), suffix::binary, 0::16>>
-    salt_iv = <<prefix::binary, bxor(2, byte), suffix::binary, 0::16>>
-
-    {cipher_key, auth_key, salt} = key_sizes(policy.rtp_profile)
-
-    cipher_key = aes_128_ctr_encrypt(key, master_iv, cipher_key)
-    auth_key = aes_128_ctr_encrypt(key, auth_iv, auth_key)
-    cipher_salt = aes_128_ctr_encrypt(key, salt_iv, salt)
-
-    %{session | rtp_session_key: cipher_key, rtp_auth_key: auth_key, rtp_salt: cipher_salt}
-  end
-
-  defp derive_rtcp_keys(session, %{master_key: key} = policy) do
-    <<prefix::binary-size(7), byte::8, suffix::binary-size(6)>> = policy.master_salt
-
-    rtcp_key_iv = <<prefix::binary, bxor(3, byte), suffix::binary, 0::16>>
-    rtcp_auth_iv = <<prefix::binary, bxor(4, byte), suffix::binary, 0::16>>
-    rtcp_salt_iv = <<prefix::binary, bxor(5, byte), suffix::binary, 0::16>>
-
-    {cipher_key, auth_key, salt} = key_sizes(policy.rtcp_profile)
-
-    rtcp_cipher_key = aes_128_ctr_encrypt(key, rtcp_key_iv, cipher_key)
-    rtcp_auth_key = aes_128_ctr_encrypt(key, rtcp_auth_iv, auth_key)
-    rtcp_salt_key = aes_128_ctr_encrypt(key, rtcp_salt_iv, salt)
-
+  defp derive_rtp_keys(session, %{master_key: key, master_salt: salt}) do
     %{
       session
-      | rtcp_session_key: rtcp_cipher_key,
-        rtcp_auth_key: rtcp_auth_key,
-        rtcp_salt: rtcp_salt_key
+      | rtp_session_key: derive_key(key, salt, @rtp_session_key_label, 128),
+        rtp_auth_key: derive_key(key, salt, @rtp_auth_key_label, 160),
+        rtp_salt: derive_key(key, salt, @rtp_salt_label, 112)
     }
   end
 
-  defp aes_128_ctr_encrypt(key, iv, input_size) do
-    :crypto.crypto_one_time(:aes_128_ctr, key, iv, <<0::size(input_size)>>, encrypt: true)
+  defp derive_rtcp_keys(session, %{master_key: key, master_salt: salt}) do
+    %{
+      session
+      | rtcp_session_key: derive_key(key, salt, @rtcp_session_key_label, 128),
+        rtcp_auth_key: derive_key(key, salt, @rtcp_auth_key_label, 160),
+        rtcp_salt: derive_key(key, salt, @rtcp_salt_label, 112)
+    }
+  end
+
+  defp derive_key(key, salt, label, size) do
+    <<prefix::binary-size(7), byte::8, suffix::binary-size(6)>> = salt
+    iv = <<prefix::binary, bxor(label, byte), suffix::binary, 0::16>>
+    :crypto.crypto_one_time(:aes_128_ctr, key, iv, <<0::size(size)>>, encrypt: true)
   end
 
   defp get_out_ctx(%{out_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
@@ -251,9 +241,6 @@ defmodule ExSRTP.Backend.Crypto do
       encrypt: false
     )
   end
-
-  defp key_sizes(:aes_cm_128_hmac_sha1_80), do: {128, 160, 112}
-  defp key_sizes(_), do: raise("Unsupported SRTP profile")
 
   defimpl Inspect do
     import Inspect.Algebra
