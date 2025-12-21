@@ -1,14 +1,14 @@
 use aes::cipher::{KeyIvInit, StreamCipher};
 use hmac::Mac;
-use rustler::{Atom, OwnedBinary};
+use rustler::OwnedBinary;
 
-use crate::{key_derivation::aes_cm_key_derivation, Aes128Ctr, HmacSha1};
+use crate::{key_derivation::aes_cm_key_derivation, Aes128Ctr, HmacSha1, ProtectionProfile};
 
 pub(crate) struct RTCPContext {
-    pub profile: Atom,
-    pub session_key: Vec<u8>,
-    pub auth_key: Vec<u8>,
-    pub salt: Vec<u8>,
+    profile: ProtectionProfile,
+    session_key: Vec<u8>,
+    auth_key: Vec<u8>,
+    salt: Vec<u8>,
     out_ssrcs: std::collections::HashMap<u32, SsrcContext>,
 }
 
@@ -28,7 +28,7 @@ impl RTCPContext {
         let master_salt = policy.master_salt.as_slice();
 
         return RTCPContext {
-            profile: policy.rtcp_profile,
+            profile: policy.rtcp_profile.into(),
             out_ssrcs: std::collections::HashMap::new(),
             session_key: aes_cm_key_derivation(master_key, master_salt, 0x3, 16),
             auth_key: aes_cm_key_derivation(master_key, master_salt, 0x4, 20),
@@ -80,10 +80,6 @@ impl RTCPContext {
             .verify_truncated_left(&data[data.len() - tag_size..]);
 
         if authentication.is_err() {
-            println!(
-                "RTCP authentication failed {}",
-                authentication.err().unwrap()
-            );
             return Err("Authentication failed".to_string());
         }
 

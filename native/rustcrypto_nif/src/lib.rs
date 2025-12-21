@@ -1,7 +1,8 @@
+use core::panic;
 use std::sync::Mutex;
 
 use hmac::Hmac;
-use rustler::{Atom, Binary, Env, NifStruct, Resource, ResourceArc, Term};
+use rustler::{atoms, Atom, Binary, Env, NifStruct, Resource, ResourceArc, Term};
 
 use crate::{rtcp_context::RTCPContext, rtp_context::RTPContext};
 
@@ -11,6 +12,24 @@ pub mod rtp_context;
 
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 type HmacSha1 = Hmac<sha1::Sha1>;
+
+atoms! {
+    aes_cm_128_hmac_sha1_80
+}
+
+#[derive(Debug)]
+enum ProtectionProfile {
+    AesCm128HmacSha1_80,
+}
+
+impl From<Atom> for ProtectionProfile {
+    fn from(atom: Atom) -> Self {
+        match atom {
+            atom if aes_cm_128_hmac_sha1_80() == atom => ProtectionProfile::AesCm128HmacSha1_80,
+            _ => panic!("Unsupported protection profile"),
+        }
+    }
+}
 
 struct State {
     rtp_context: Mutex<RTPContext>,

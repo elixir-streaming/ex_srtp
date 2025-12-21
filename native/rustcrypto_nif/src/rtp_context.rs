@@ -2,15 +2,15 @@ use std::{cmp::max, collections::HashMap};
 
 use aes::cipher::{KeyIvInit, StreamCipher};
 use hmac::Mac;
-use rustler::{Atom, OwnedBinary};
+use rustler::OwnedBinary;
 
 use crate::{
     key_derivation::{aes_cm_key_derivation, generate_counter},
-    Aes128Ctr, HmacSha1, SrtpPolicy,
+    Aes128Ctr, HmacSha1, ProtectionProfile, SrtpPolicy,
 };
 
 pub(crate) struct RTPContext {
-    pub profile: Atom,
+    pub profile: ProtectionProfile,
     pub session_key: Vec<u8>,
     pub auth_key: Vec<u8>,
     pub salt: Vec<u8>,
@@ -18,10 +18,11 @@ pub(crate) struct RTPContext {
     in_ssrcs: std::collections::HashMap<u32, SsrcContext>,
 }
 
+#[derive(Default)]
 struct SsrcContext {
-    pub roc: u32,
-    pub last_seq: u16,
-    pub s_l: Option<u16>,
+    roc: u32,
+    last_seq: u16,
+    s_l: Option<u16>,
 }
 
 impl RTPContext {
@@ -30,7 +31,7 @@ impl RTPContext {
         let master_salt = policy.master_salt.as_slice();
 
         return RTPContext {
-            profile: policy.rtp_profile,
+            profile: policy.rtp_profile.into(),
             out_ssrcs: HashMap::new(),
             in_ssrcs: HashMap::new(),
             session_key: aes_cm_key_derivation(master_key, master_salt, 0x0, 16),
@@ -54,7 +55,7 @@ impl RTPContext {
         let ctx = self
             .out_ssrcs
             .entry(ssrc)
-            .or_insert_with(|| SsrcContext::new());
+            .or_insert_with(|| SsrcContext::default());
 
         ctx.inc_roc(seq);
 
@@ -81,7 +82,7 @@ impl RTPContext {
         let ctx = self
             .in_ssrcs
             .entry(ssrc)
-            .or_insert_with(|| SsrcContext::new());
+            .or_insert_with(|| SsrcContext::default());
 
         let roc = ctx.estimate_roc(seq);
 
@@ -117,14 +118,6 @@ impl RTPContext {
 }
 
 impl SsrcContext {
-    pub fn new() -> Self {
-        return SsrcContext {
-            roc: 0,
-            last_seq: 0,
-            s_l: None,
-        };
-    }
-
     pub fn inc_roc(&mut self, seq: u16) {
         if seq < self.last_seq {
             self.roc = self.roc.wrapping_add(1);
