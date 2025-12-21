@@ -94,7 +94,9 @@ defmodule ExSRTP.Backend.Crypto do
          ctx <- get_in_ctx(session, packet.ssrc),
          {roc, ctx} <- Context.estimate_roc(ctx, packet.sequence_number),
          :ok <- authenticate(session, roc, data) do
-      <<encrypted_data::binary-size(byte_size(packet.payload) - 10), _tag::binary>> =
+      tag_size = tag_size(session.rtp_profile)
+
+      <<encrypted_data::binary-size(byte_size(packet.payload) - tag_size), _tag::binary>> =
         packet.payload
 
       iv = bxor(ctx.base_iv, (roc <<< 16 ||| packet.sequence_number) <<< 16)
@@ -167,7 +169,9 @@ defmodule ExSRTP.Backend.Crypto do
     Context.new(ssrc, session.rtp_salt, session.rtcp_salt)
   end
 
-  defp do_protect(%{rtp_profile: :aes_cm_128_hmac_sha1_80} = session, header, payload, iv, roc) do
+  defp do_protect(session, header, payload, iv, roc) do
+    tag_size = tag_size(session.rtp_profile)
+
     payload =
       :crypto.crypto_one_time(:aes_128_ctr, session.rtp_session_key, <<iv::128>>, payload,
         encrypt: true
@@ -178,12 +182,12 @@ defmodule ExSRTP.Backend.Crypto do
       |> :crypto.mac_update(header)
       |> :crypto.mac_update(payload)
       |> :crypto.mac_update(<<roc::32>>)
-      |> :crypto.mac_finalN(10)
+      |> :crypto.mac_finalN(tag_size)
 
     <<header::binary, payload::binary, auth_tag::binary>>
   end
 
-  defp do_protect_rtcp(%{rtcp_profile: :aes_cm_128_hmac_sha1_80} = session, data, iv, rtcp_idx) do
+  defp do_protect_rtcp(session, data, iv, rtcp_idx) do
     <<header::binary-size(8), payload::binary>> = data
 
     payload =
@@ -192,12 +196,13 @@ defmodule ExSRTP.Backend.Crypto do
       )
 
     rtcp_packet = <<header::binary, payload::binary, 1::1, rtcp_idx::31>>
-    auth_tag = :crypto.macN(:hmac, :sha, session.rtcp_auth_key, rtcp_packet, 10)
+    tag_size = tag_size(session.rtcp_profile)
+    auth_tag = :crypto.macN(:hmac, :sha, session.rtcp_auth_key, rtcp_packet, tag_size)
     <<rtcp_packet::binary, auth_tag::binary>>
   end
 
-  defp authenticate(%{rtp_profile: :aes_cm_128_hmac_sha1_80} = session, roc, data) do
-    tag_size = 10
+  defp authenticate(session, roc, data) do
+    tag_size = tag_size(session.rtp_profile)
     <<encrypted_data::binary-size(byte_size(data) - tag_size), tag::binary>> = data
 
     new_tag =
@@ -213,7 +218,7 @@ defmodule ExSRTP.Backend.Crypto do
   end
 
   defp authenticate_rtcp(session, data) do
-    tag_size = 10
+    tag_size = tag_size(session.rtcp_profile)
 
     <<rtcp_data::binary-size(byte_size(data) - tag_size - 4), e::1, index::31, tag::binary>> =
       data
@@ -241,6 +246,9 @@ defmodule ExSRTP.Backend.Crypto do
       encrypt: false
     )
   end
+
+  defp tag_size(:aes_cm_128_hmac_sha1_80), do: 10
+  defp tag_size(:aes_cm_128_hmac_sha1_32), do: 4
 
   defimpl Inspect do
     import Inspect.Algebra
