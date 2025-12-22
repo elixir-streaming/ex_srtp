@@ -38,6 +38,7 @@ impl RTCPContext {
 
     pub fn protect(&mut self, compound_packet: &[u8]) -> OwnedBinary {
         let (header, payload) = compound_packet.split_at(8);
+        let tag_size = self.profile.tag_size();
 
         let ssrc = u32::from_be_bytes(header[4..].try_into().unwrap());
         let ctx = self
@@ -49,7 +50,7 @@ impl RTCPContext {
         ctx.rtcp_index = rtcp_index.wrapping_add(1);
         let iv = self.generate_counter(ssrc, rtcp_index);
 
-        let mut owned = OwnedBinary::new(header.len() + payload.len() + 14).unwrap();
+        let mut owned = OwnedBinary::new(header.len() + payload.len() + tag_size + 4).unwrap();
         owned.as_mut_slice()[0..header.len()].copy_from_slice(header);
         owned.as_mut_slice()[header.len()..header.len() + payload.len()].copy_from_slice(payload);
         owned.as_mut_slice()[header.len() + payload.len()..header.len() + payload.len() + 4]
@@ -64,7 +65,7 @@ impl RTCPContext {
             .chain_update(header)
             .chain_update(&owned.as_slice()[header.len()..header.len() + payload.len() + 4])
             .finalize()
-            .into_bytes()[..10];
+            .into_bytes()[..tag_size];
 
         owned.as_mut_slice()[header.len() + payload.len() + 4..].copy_from_slice(auth_tag);
 
@@ -72,7 +73,7 @@ impl RTCPContext {
     }
 
     pub fn unprotect(&mut self, data: &[u8]) -> Result<OwnedBinary, String> {
-        let tag_size = 10;
+        let tag_size = self.profile.tag_size();
 
         let authentication = HmacSha1::new_from_slice(self.auth_key.as_slice())
             .unwrap()

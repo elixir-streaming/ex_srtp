@@ -43,11 +43,12 @@ impl RTPContext {
     pub fn protect(&mut self, header: &[u8], payload: &[u8]) -> OwnedBinary {
         let header_size = header.len();
         let payload_size = payload.len();
-        let size = header_size + payload_size + 10;
+        let tag_size = self.profile.tag_size();
+        let size = header_size + payload_size + tag_size;
 
         let mut owned = OwnedBinary::new(size).unwrap();
         owned.as_mut_slice()[0..header_size].copy_from_slice(header);
-        owned.as_mut_slice()[header_size..size - 10].copy_from_slice(payload);
+        owned.as_mut_slice()[header_size..size - tag_size].copy_from_slice(payload);
 
         let ssrc = u32::from_be_bytes(header[8..12].try_into().unwrap());
         let seq = u16::from_be_bytes(header[2..4].try_into().unwrap());
@@ -77,7 +78,7 @@ impl RTPContext {
     pub fn unprotect(&mut self, header: &[u8], payload: &[u8]) -> Result<OwnedBinary, String> {
         let ssrc = u32::from_be_bytes(header[8..12].try_into().unwrap());
         let seq = u16::from_be_bytes(header[2..4].try_into().unwrap());
-        let tag_size = 10;
+        let tag_size = self.profile.tag_size();
 
         let ctx = self
             .in_ssrcs
@@ -107,13 +108,11 @@ impl RTPContext {
     }
 
     fn calculate_auth_tag(&self, data: &[&[u8]]) -> Vec<u8> {
-        let tag_size = 10;
-
         let mut mac = HmacSha1::new_from_slice(self.auth_key.as_slice()).unwrap();
         for chunk in data {
             mac.update(chunk);
         }
-        return mac.finalize().into_bytes()[0..tag_size].to_vec();
+        return mac.finalize().into_bytes()[0..self.profile.tag_size()].to_vec();
     }
 }
 
@@ -137,13 +136,13 @@ impl SsrcContext {
         let mut roc = self.roc;
 
         if s_l < 32_768 {
-            if seq_number - s_l > 32_768 {
+            if seq_number as i32 - s_l as i32 > 32_768 {
                 roc = roc.wrapping_sub(1);
             } else {
                 self.s_l = Some(max(s_l, seq_number));
             }
         } else {
-            if s_l - 32_768 > seq_number {
+            if s_l as i32 - 32_768 as i32 > seq_number as i32 {
                 roc = roc.wrapping_add(1);
                 self.roc = roc;
                 self.s_l = Some(seq_number);

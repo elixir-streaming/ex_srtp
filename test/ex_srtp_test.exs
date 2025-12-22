@@ -9,7 +9,13 @@ defmodule ExSRTPTest do
   setup do
     srtp = ExSRTP.new!(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
 
-    {:ok, rust_srtp} = RustCrypto.init(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
+    {:ok, rust_srtp} =
+      RustCrypto.init(%ExSRTP.Policy{
+        master_key: @key,
+        master_salt: @salt,
+        rtp_profile: :aes_cm_128_hmac_sha1_80,
+        rtcp_profile: :aes_cm_128_hmac_sha1_80
+      })
 
     packet = %ExRTP.Packet{
       version: 2,
@@ -60,17 +66,19 @@ defmodule ExSRTPTest do
         <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
           155, 23, 74, 128, 181, 142, 45>>
 
-      assert {:ok, ^expected, _srtp} = ExSRTP.protect(packet, srtp)
-      assert {^expected, _srtp} = ExSRTP.protect!(packet, srtp)
+      assert {:ok, protected_packet, _srtp} = ExSRTP.protect(packet, srtp)
+      assert IO.iodata_to_binary(protected_packet) == expected
+
+      assert {protected_packet, _srtp} = ExSRTP.protect!(packet, srtp)
+      assert IO.iodata_to_binary(protected_packet) == expected
     end
 
     test "Rust backend", %{rust_srtp: srtp, packet: packet} do
-      expectedd ==
+      expected =
         <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
           155, 23, 74, 128, 181, 142, 45>>
 
       assert {:ok, ^expected, _srtp} = RustCrypto.protect(packet, srtp)
-      assert {^expectedd, _srtp} = RustCrypto.protect!(packet, srtp)
     end
   end
 
@@ -92,7 +100,6 @@ defmodule ExSRTPTest do
           139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
 
       assert {:ok, ^expected, _srtp} = RustCrypto.protect_rtcp(compound_packet, srtp)
-      assert {^expected, _srtp} = RustCrypto.protect_rtcp(compound_packet, srtp)
     end
   end
 
@@ -151,6 +158,18 @@ defmodule ExSRTPTest do
       assert {^expected_packets, _srtp} = ExSRTP.unprotect_rtcp!(protected_rtcp, srtp)
     end
 
+    test "unprotect rtcp with rust backend", %{rust_srtp: srtp, compound_packet: packets} do
+      protected_rtcp =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
+
+      assert {:ok, unprotected_packets, _srtp} =
+               ExSRTP.Backend.RustCrypto.unprotect_rtcp(protected_rtcp, srtp)
+
+      assert unprotected_packets == packets
+    end
+
     test "fail on replayed rtcp", %{srtp: srtp} do
       protected_rtcp =
         <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
@@ -166,30 +185,6 @@ defmodule ExSRTPTest do
     end
   end
 
-  describe "unprotect rtcp" do
-    test "unprotect rtcp", %{srtp: srtp, compound_packet: packets} do
-      protected_rtcp =
-        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
-          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
-          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
-
-      assert {:ok, unprotected_packets, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
-      assert unprotected_packets == packets
-    end
-
-    test "unprotect rtcp with rust backend", %{rust_srtp: srtp, compound_packet: packets} do
-      protected_rtcp =
-        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
-          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
-          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
-
-      assert {:ok, unprotected_packets, _srtp} =
-               ExSRTP.Backend.RustCrypto.unprotect_rtcp(protected_rtcp, srtp)
-
-      assert unprotected_packets == packets
-    end
-  end
-
   for profile <- [:aes_cm_128_hmac_sha1_80, :aes_cm_128_hmac_sha1_32] do
     describe "Protect/unprotect: #{profile}" do
       setup do
@@ -201,10 +196,18 @@ defmodule ExSRTPTest do
             rtcp_profile: unquote(profile)
           })
 
-        {:ok, srtp: srtp}
+        {:ok, rust_srtp} =
+          RustCrypto.init(%ExSRTP.Policy{
+            master_key: @key,
+            master_salt: @salt,
+            rtp_profile: unquote(profile),
+            rtcp_profile: unquote(profile)
+          })
+
+        {:ok, srtp: srtp, rust_srtp: rust_srtp}
       end
 
-      test "protect and unprotect", %{srtp: srtp} do
+      test "protect and unprotect", %{srtp: srtp, rust_srtp: rust_srtp} do
         original_packets = packets(10000)
         {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
         encrypted_packets = Enum.map(encrypted_packets, &IO.iodata_to_binary/1)
@@ -213,12 +216,17 @@ defmodule ExSRTPTest do
         |> Enum.zip(encrypted_packets)
         |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
           {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
+
+          {:ok, rust_unprotected_packet, _srtp} =
+            RustCrypto.unprotect(protected_packet, rust_srtp)
+
           assert unprotected_packet == original_packet
+          assert rust_unprotected_packet == original_packet
           srtp
         end)
       end
 
-      test "protect and unprotect out of order", %{srtp: srtp} do
+      test "protect and unprotect out of order", %{srtp: srtp, rust_srtp: rust_srtp} do
         original_packets = packets(32_000)
         {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
         encrypted_packets = Enum.map(encrypted_packets, &IO.iodata_to_binary/1)
@@ -236,7 +244,12 @@ defmodule ExSRTPTest do
         [{first_packet, first_encrypted} | shuffled]
         |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
           {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
+
+          {:ok, rust_unprotected_packet, _srtp} =
+            RustCrypto.unprotect(protected_packet, rust_srtp)
+
           assert unprotected_packet == original_packet
+          assert rust_unprotected_packet == original_packet
           srtp
         end)
       end

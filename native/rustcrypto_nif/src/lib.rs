@@ -14,19 +14,31 @@ type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 type HmacSha1 = Hmac<sha1::Sha1>;
 
 atoms! {
-    aes_cm_128_hmac_sha1_80
+    aes_cm_128_hmac_sha1_80,
+    aes_cm_128_hmac_sha1_32,
 }
 
 #[derive(Debug)]
 enum ProtectionProfile {
     AesCm128HmacSha1_80,
+    AesCm128HmacSha1_32,
 }
 
 impl From<Atom> for ProtectionProfile {
     fn from(atom: Atom) -> Self {
         match atom {
             atom if aes_cm_128_hmac_sha1_80() == atom => ProtectionProfile::AesCm128HmacSha1_80,
+            atom if aes_cm_128_hmac_sha1_32() == atom => ProtectionProfile::AesCm128HmacSha1_32,
             _ => panic!("Unsupported protection profile"),
+        }
+    }
+}
+
+impl ProtectionProfile {
+    fn tag_size(&self) -> usize {
+        match self {
+            ProtectionProfile::AesCm128HmacSha1_80 => 10,
+            ProtectionProfile::AesCm128HmacSha1_32 => 4,
         }
     }
 }
