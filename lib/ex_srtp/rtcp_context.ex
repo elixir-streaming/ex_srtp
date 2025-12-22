@@ -38,6 +38,8 @@ defmodule ExSRTP.RTCPContext do
     %{ctx | index: rem(idx + 1, @srtp_index_max)}
   end
 
+  @doc false
+  @spec check_replay(t(), non_neg_integer()) :: {:ok, t()} | {:error, :replay | :tls_bloom_filter}
   def check_replay(ctx, packet_index) do
     case ReplayList.check_and_update(ctx.replay, packet_index) do
       {:ok, new_replay} -> {:ok, %{ctx | replay: new_replay}}

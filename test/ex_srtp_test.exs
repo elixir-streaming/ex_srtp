@@ -34,8 +34,25 @@ defmodule ExSRTPTest do
     {:ok, srtp: srtp, packet: packet, compound_packet: compound_packet}
   end
 
+  describe "new" do
+    test "creates srtp session" do
+      assert {:ok, _srtp} = ExSRTP.new(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
+      assert %ExSRTP{} = ExSRTP.new!(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
+    end
+
+    test "fails with invalid key length" do
+      assert {:error, :invalid_master_key_size} =
+               ExSRTP.new(%ExSRTP.Policy{master_key: "short", master_salt: @salt})
+
+      assert_raise RuntimeError, "Failed to create SRTP session: :invalid_master_key_size", fn ->
+        ExSRTP.new!(%ExSRTP.Policy{master_key: "short", master_salt: @salt})
+      end
+    end
+  end
+
   test "protect packet", %{srtp: srtp, packet: packet} do
-    assert {:ok, protected_packet, _srtp} = ExSRTP.protect(packet, srtp)
+    assert {:ok, _, _srtp} = ExSRTP.protect(packet, srtp)
+    assert {protected_packet, _srtp} = ExSRTP.protect!(packet, srtp)
 
     assert IO.iodata_to_binary(protected_packet) ==
              <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169,
@@ -43,7 +60,8 @@ defmodule ExSRTPTest do
   end
 
   test "protect rtcp", %{srtp: srtp, compound_packet: compound_packet} do
-    assert {:ok, protected_rtcp, _srtp} = ExSRTP.protect_rtcp(compound_packet, srtp)
+    assert {:ok, _, _srtp} = ExSRTP.protect_rtcp(compound_packet, srtp)
+    assert {protected_rtcp, _srtp} = ExSRTP.protect_rtcp!(compound_packet, srtp)
 
     expected =
       <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
@@ -59,8 +77,8 @@ defmodule ExSRTPTest do
         <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
           155, 23, 74, 128, 181, 142, 45>>
 
-      assert {:ok, unprotected_packet, _srtp} = ExSRTP.unprotect(protected_packet, srtp)
-      assert unprotected_packet == packet
+      assert {:ok, ^packet, _srtp} = ExSRTP.unprotect(protected_packet, srtp)
+      assert {^packet, _srtp} = ExSRTP.unprotect!(protected_packet, srtp)
     end
 
     test "unprotect replayed rtp", %{srtp: srtp, packet: packet} do
@@ -68,9 +86,12 @@ defmodule ExSRTPTest do
         <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
           155, 23, 74, 128, 181, 142, 45>>
 
-      assert {:ok, unprotected_packet, srtp} = ExSRTP.unprotect(protected_packet, srtp)
+      assert {:ok, ^packet, srtp} = ExSRTP.unprotect(protected_packet, srtp)
       assert {:error, :replay} = ExSRTP.unprotect(protected_packet, srtp)
-      assert unprotected_packet == packet
+
+      assert_raise RuntimeError, "Failed to unprotect RTP packet: :replay", fn ->
+        ExSRTP.unprotect!(protected_packet, srtp)
+      end
     end
   end
 
@@ -80,8 +101,6 @@ defmodule ExSRTPTest do
         <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
           156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
           139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
-
-      assert {:ok, unprotected_packets, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
 
       expected_packets = [
         %ExRTCP.Packet.SenderReport{
@@ -95,7 +114,8 @@ defmodule ExSRTPTest do
         %ExRTCP.Packet.Goodbye{sources: [0x89A1FF87]}
       ]
 
-      assert unprotected_packets == expected_packets
+      assert {:ok, ^expected_packets, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+      assert {^expected_packets, _srtp} = ExSRTP.unprotect_rtcp!(protected_rtcp, srtp)
     end
 
     test "fail on replayed rtcp", %{srtp: srtp} do
@@ -106,6 +126,10 @@ defmodule ExSRTPTest do
 
       assert {:ok, _unprotected_packets, srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
       assert {:error, :replay} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+
+      assert_raise RuntimeError, "Failed to unprotect RTCP packets: :replay", fn ->
+        ExSRTP.unprotect_rtcp!(protected_rtcp, srtp)
+      end
     end
   end
 
