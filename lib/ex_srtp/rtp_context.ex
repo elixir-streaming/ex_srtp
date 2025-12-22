@@ -1,40 +1,39 @@
-defmodule ExSRTP.Context do
+defmodule ExSRTP.RTPContext do
   @moduledoc """
-  SRTP context state.
+  SRTP RTP context state.
   """
 
   import Bitwise
 
+  alias ExSRTP.ReplayList
+
   @compile {:inline, inc_roc: 2, estimate_roc: 2}
 
-  @srtp_index_max 1 <<< 31
   @max_roc 1 <<< 32
+  @default_replay_window 64
 
   @type t :: %__MODULE__{
           roc: non_neg_integer(),
           s_l: non_neg_integer() | nil,
           base_iv: non_neg_integer(),
-          rtcp_base_iv: non_neg_integer(),
           last_seq: non_neg_integer(),
-          rtcp_idx: non_neg_integer()
+          rtp_replay: ReplayProtection.t() | nil
         }
 
-  defstruct [:s_l, :base_iv, :rtcp_base_iv, last_seq: 0, roc: 0, rtcp_idx: 1]
+  defstruct [:s_l, :base_iv, :rtp_replay, last_seq: 0, roc: 0]
 
   @doc false
-  @spec new(non_neg_integer(), binary(), binary()) :: t()
-  def new(ssrc, rtp_salt, rtcp_salt) do
+  @spec new(non_neg_integer(), binary()) :: t()
+  def new(ssrc, rtp_salt, replay_window_size \\ @default_replay_window) do
     base_iv =
       <<rtp_salt::binary, 0::16>>
       |> :crypto.exor(<<ssrc::64, 0::64>>)
       |> :crypto.bytes_to_integer()
 
-    rtcp_base_iv =
-      <<rtcp_salt::binary, 0::16>>
-      |> :crypto.exor(<<ssrc::64, 0::64>>)
-      |> :crypto.bytes_to_integer()
-
-    %__MODULE__{base_iv: base_iv, rtcp_base_iv: rtcp_base_iv}
+    %__MODULE__{
+      base_iv: base_iv,
+      rtp_replay: ReplayList.new(replay_window_size)
+    }
   end
 
   @doc false
@@ -44,12 +43,6 @@ defmodule ExSRTP.Context do
   end
 
   def inc_roc(ctx, seq), do: %{ctx | last_seq: seq}
-
-  @doc false
-  @spec inc_rtcp_index(t()) :: t()
-  def inc_rtcp_index(%{rtcp_idx: idx} = ctx) do
-    %{ctx | rtcp_idx: rem(idx + 1, @srtp_index_max)}
-  end
 
   # Get ROC at receiver side
   @doc false
@@ -73,5 +66,14 @@ defmodule ExSRTP.Context do
   def estimate_roc(ctx, seq_number) do
     roc = rem(ctx.roc + 1, @max_roc)
     {roc, %{ctx | roc: roc, s_l: seq_number}}
+  end
+
+  @doc false
+  @spec check_replay(t(), non_neg_integer()) :: {:ok, t()} | {:error, :too_old | :replay}
+  def check_replay(ctx, packet_index) do
+    case ReplayList.check_and_update(ctx.rtp_replay, packet_index) do
+      {:ok, new_replay} -> {:ok, %{ctx | rtp_replay: new_replay}}
+      error -> error
+    end
   end
 end

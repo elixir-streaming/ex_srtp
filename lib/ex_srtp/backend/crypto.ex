@@ -8,7 +8,7 @@ defmodule ExSRTP.Backend.Crypto do
   import Bitwise
 
   alias ExRTCP.CompoundPacket
-  alias ExSRTP.Context
+  alias ExSRTP.{RTCPContext, RTPContext}
 
   @rtp_session_key_label 0
   @rtp_auth_key_label 1
@@ -26,8 +26,12 @@ defmodule ExSRTP.Backend.Crypto do
           rtcp_session_key: binary() | nil,
           rtcp_auth_key: binary() | nil,
           rtcp_salt: binary() | nil,
-          out_contexts: %{non_neg_integer() => Context.t()},
-          in_contexts: %{non_neg_integer() => Context.t()}
+          rtp_replay_window_size: non_neg_integer() | nil,
+          rtcp_replay_window_size: non_neg_integer() | nil,
+          out_rtp_contexts: %{non_neg_integer() => RTPContext.t()},
+          in_rtp_contexts: %{non_neg_integer() => RTPContext.t()},
+          out_rtcp_contexts: %{non_neg_integer() => Context.t()},
+          in_rtcp_contexts: %{non_neg_integer() => Context.t()}
         }
 
   defstruct [
@@ -39,15 +43,21 @@ defmodule ExSRTP.Backend.Crypto do
     :rtcp_salt,
     :rtp_profile,
     :rtcp_profile,
-    out_contexts: %{},
-    in_contexts: %{}
+    :rtp_replay_window_size,
+    :rtcp_replay_window_size,
+    out_rtp_contexts: %{},
+    in_rtp_contexts: %{},
+    out_rtcp_contexts: %{},
+    in_rtcp_contexts: %{}
   ]
 
   @impl true
   def init(%ExSRTP.Policy{} = policy) do
     session = %__MODULE__{
       rtp_profile: policy.rtp_profile,
-      rtcp_profile: policy.rtcp_profile
+      rtcp_profile: policy.rtcp_profile,
+      rtp_replay_window_size: policy.rtp_replay_window_size,
+      rtcp_replay_window_size: policy.rtcp_replay_window_size
     }
 
     session
@@ -58,7 +68,7 @@ defmodule ExSRTP.Backend.Crypto do
 
   @impl true
   def protect(%{ssrc: ssrc} = packet, session) do
-    ctx = session |> get_out_ctx(packet.ssrc) |> Context.inc_roc(packet.sequence_number)
+    ctx = :rtp_out |> get_ctx(session, packet.ssrc) |> RTPContext.inc_roc(packet.sequence_number)
 
     idx = ctx.roc <<< 16 ||| packet.sequence_number
     iv = bxor(ctx.base_iv, idx <<< 16)
@@ -66,7 +76,7 @@ defmodule ExSRTP.Backend.Crypto do
     header = ExRTP.Packet.encode(%{packet | payload: <<>>})
 
     packet = do_protect(session, header, packet.payload, iv, ctx.roc)
-    session = %{session | out_contexts: Map.put(session.out_contexts, ssrc, ctx)}
+    session = %{session | out_rtp_contexts: Map.put(session.out_rtp_contexts, ssrc, ctx)}
     {:ok, packet, session}
   end
 
@@ -74,15 +84,15 @@ defmodule ExSRTP.Backend.Crypto do
   def protect_rtcp(compound_packet, session) do
     # first rtcp packet must be SR or RR
     ssrc = List.first(compound_packet).ssrc
-    ctx = get_out_ctx(session, ssrc)
+    ctx = get_ctx(:rtcp_out, session, ssrc)
     data = ExRTCP.CompoundPacket.encode(compound_packet)
 
-    iv = bxor(ctx.rtcp_base_iv, ctx.rtcp_idx <<< 16)
-    data = do_protect_rtcp(session, data, iv, ctx.rtcp_idx)
+    iv = bxor(ctx.base_iv, ctx.index <<< 16)
+    data = do_protect_rtcp(session, data, iv, ctx.index)
 
     session = %{
       session
-      | out_contexts: Map.put(session.out_contexts, ssrc, Context.inc_rtcp_index(ctx))
+      | out_rtcp_contexts: Map.put(session.out_rtcp_contexts, ssrc, RTCPContext.inc_index(ctx))
     }
 
     {:ok, data, session}
@@ -91,21 +101,21 @@ defmodule ExSRTP.Backend.Crypto do
   @impl true
   def unprotect(data, session) do
     with {:ok, packet} <- ExRTP.Packet.decode(data),
-         ctx <- get_in_ctx(session, packet.ssrc),
-         {roc, ctx} <- Context.estimate_roc(ctx, packet.sequence_number),
+         ctx <- get_ctx(:rtp_in, session, packet.ssrc),
+         {roc, ctx} <- RTPContext.estimate_roc(ctx, packet.sequence_number),
+         index <- roc <<< 16 ||| packet.sequence_number,
+         {:ok, ctx} <- RTPContext.check_replay(ctx, index),
          :ok <- authenticate(session, roc, data) do
       tag_size = tag_size(session.rtp_profile)
 
       <<encrypted_data::binary-size(byte_size(packet.payload) - tag_size), _tag::binary>> =
         packet.payload
 
-      iv = bxor(ctx.base_iv, (roc <<< 16 ||| packet.sequence_number) <<< 16)
-
       decrypted_data =
         :crypto.crypto_one_time(
           :aes_128_ctr,
           session.rtp_session_key,
-          <<iv::128>>,
+          <<bxor(ctx.base_iv, index <<< 16)::128>>,
           encrypted_data,
           encrypt: false
         )
@@ -113,18 +123,27 @@ defmodule ExSRTP.Backend.Crypto do
       {:ok, %{packet | payload: decrypted_data},
        %{
          session
-         | in_contexts: Map.put(session.in_contexts, packet.ssrc, ctx)
+         | in_rtp_contexts: Map.put(session.in_rtp_contexts, packet.ssrc, ctx)
        }}
     end
   end
 
   @impl true
-  def unprotect_rtcp(<<header::32, ssrc::32, _::binary>> = data, session) do
-    ctx = get_in_ctx(session, ssrc)
+  def unprotect_rtcp(<<header::32, ssrc::32, rest::binary>> = data, session) do
+    ctx = get_ctx(:rtcp_in, session, ssrc)
+    tag_size = tag_size(session.rtcp_profile)
 
-    with {:ok, encrypted_data, e, index} <- authenticate_rtcp(session, data),
-         payload <- do_unprotect_rtcp(session, e, index, ctx.rtcp_base_iv, encrypted_data),
+    <<_::binary-size(byte_size(rest) - tag_size - 4), _::1, index::31, _tag::binary>> = rest
+
+    with {:ok, ctx} <- RTCPContext.check_replay(ctx, index),
+         {:ok, encrypted_data, e, index} <- authenticate_rtcp(session, data),
+         payload <- do_unprotect_rtcp(session, e, index, ctx.base_iv, encrypted_data),
          {:ok, packets} <- CompoundPacket.decode(<<header::32, ssrc::32, payload::binary>>) do
+      session = %{
+        session
+        | in_rtcp_contexts: Map.put(session.in_rtcp_contexts, ssrc, ctx)
+      }
+
       {:ok, packets, session}
     end
   end
@@ -153,21 +172,31 @@ defmodule ExSRTP.Backend.Crypto do
     :crypto.crypto_one_time(:aes_128_ctr, key, iv, <<0::size(size)>>, encrypt: true)
   end
 
-  defp get_out_ctx(%{out_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
+  @compile {:inline, get_ctx: 3}
+  defp get_ctx(:rtp_out, %{out_rtp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
     contexts[ssrc]
   end
 
-  defp get_out_ctx(session, ssrc) do
-    Context.new(ssrc, session.rtp_salt, session.rtcp_salt)
-  end
-
-  defp get_in_ctx(%{in_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
+  defp get_ctx(:rtp_in, %{in_rtp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
     contexts[ssrc]
   end
 
-  defp get_in_ctx(session, ssrc) do
-    Context.new(ssrc, session.rtp_salt, session.rtcp_salt)
+  defp get_ctx(:rtcp_out, %{out_rtcp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
+    contexts[ssrc]
   end
+
+  defp get_ctx(:rtcp_in, %{in_rtcp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
+    contexts[ssrc]
+  end
+
+  defp get_ctx(:rtp_out, session, ssrc), do: RTPContext.new(ssrc, session.rtp_salt)
+  defp get_ctx(:rtcp_out, session, ssrc), do: RTCPContext.new(ssrc, session.rtcp_salt)
+
+  defp get_ctx(:rtp_in, session, ssrc),
+    do: RTPContext.new(ssrc, session.rtp_salt, session.rtp_replay_window_size)
+
+  defp get_ctx(:rtcp_in, session, ssrc),
+    do: RTCPContext.new(ssrc, session.rtcp_salt, session.rtcp_replay_window_size)
 
   defp do_protect(session, header, payload, iv, roc) do
     tag_size = tag_size(session.rtp_profile)
@@ -260,7 +289,6 @@ defmodule ExSRTP.Backend.Crypto do
         "#ExSRTP.Backend.Crypto<",
         "rtp_profile: #{inspect(session.rtp_profile)}, ",
         "rtcp_profile: #{inspect(session.rtcp_profile)}, ",
-        "out_contexts: #{map_size(session.out_contexts)} contexts",
         ">"
       ])
     end
