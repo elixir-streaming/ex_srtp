@@ -1,6 +1,32 @@
 defmodule ExSRTP.Policy do
   @moduledoc """
   Module describing a policy of SRTP.
+
+  An SRTP policy defines the cryptographic parameters used to protect
+  RTP and RTCP packets, including the master key, master salt, encryption
+  and authentication profiles, and replay protection settings.
+
+  ## Fields
+
+    - `master_key` (binary): The master key used for encryption and authentication.
+      Must be 16 bytes long.
+
+    - `master_salt` (binary | nil): The master salt used in key derivation.
+      Must be 14 bytes long if provided. Defaults to a zeroed 96-bit salt if not specified.
+
+    - `rtp_profile` (profile | nil): The SRTP profile for RTP packets.
+      Can be either `:aes_cm_128_hmac_sha1_80` or `:aes_cm_128_hmac_sha1_32`.
+      Defaults to `:aes_cm_128_hmac_sha1_80` if not specified.
+
+    - `rtcp_profile` (profile | nil): The SRTP profile for RTCP packets.
+      Can be either `:aes_cm_128_hmac_sha1_80` or `:aes_cm_128_hmac_sha1_32`.
+      Defaults to the value of `rtp_profile` if not specified.
+
+    - `rtp_replay_window_size` (non_neg_integer | nil): The size of the replay protection window for RTP packets.
+      Defaults to 64 if not specified.
+
+    - `rtcp_replay_window_size` (non_neg_integer | nil): The size of the replay protection window for RTCP packets.
+      Defaults to 128 if not specified.
   """
 
   @profiles [:aes_cm_128_hmac_sha1_80, :aes_cm_128_hmac_sha1_32]
@@ -11,11 +37,20 @@ defmodule ExSRTP.Policy do
           master_key: binary(),
           master_salt: binary() | nil,
           rtp_profile: profile() | nil,
-          rtcp_profile: profile() | nil
+          rtcp_profile: profile() | nil,
+          rtp_replay_window_size: non_neg_integer() | nil,
+          rtcp_replay_window_size: non_neg_integer() | nil
         }
 
   @enforce_keys [:master_key]
-  defstruct @enforce_keys ++ [:master_salt, :rtp_profile, :rtcp_profile]
+  defstruct @enforce_keys ++
+              [
+                :master_salt,
+                :rtp_profile,
+                :rtcp_profile,
+                rtp_replay_window_size: 64,
+                rtcp_replay_window_size: 128
+              ]
 
   @spec new(master_key :: binary(), master_salt :: binary()) :: t()
   def new(master_key, master_salt \\ <<0::96>>) do

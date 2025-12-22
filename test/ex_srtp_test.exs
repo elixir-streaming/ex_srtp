@@ -53,36 +53,60 @@ defmodule ExSRTPTest do
     assert protected_rtcp == expected
   end
 
-  test "unprotect rtp", %{srtp: srtp, packet: packet} do
-    protected_packet =
-      <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
-        155, 23, 74, 128, 181, 142, 45>>
+  describe "unprotect rtp" do
+    test "unprotect rtp", %{srtp: srtp, packet: packet} do
+      protected_packet =
+        <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
+          155, 23, 74, 128, 181, 142, 45>>
 
-    assert {:ok, unprotected_packet, _srtp} = ExSRTP.unprotect(protected_packet, srtp)
-    assert unprotected_packet == packet
+      assert {:ok, unprotected_packet, _srtp} = ExSRTP.unprotect(protected_packet, srtp)
+      assert unprotected_packet == packet
+    end
+
+    test "unprotect replayed rtp", %{srtp: srtp, packet: packet} do
+      protected_packet =
+        <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
+          155, 23, 74, 128, 181, 142, 45>>
+
+      assert {:ok, unprotected_packet, srtp} = ExSRTP.unprotect(protected_packet, srtp)
+      assert {:error, :replay} = ExSRTP.unprotect(protected_packet, srtp)
+      assert unprotected_packet == packet
+    end
   end
 
-  test "unprotect rtcp", %{srtp: srtp} do
-    protected_rtcp =
-      <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
-        156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
-        139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
+  describe "unprotect rtcp" do
+    test "unprotect rtcp", %{srtp: srtp} do
+      protected_rtcp =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
 
-    assert {:ok, unprotected_packets, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+      assert {:ok, unprotected_packets, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
 
-    expected_packets = [
-      %ExRTCP.Packet.SenderReport{
-        ssrc: 0x89A1FF87,
-        ntp_timestamp: 0x1234567890ABCDEF,
-        rtp_timestamp: 123_456,
-        packet_count: 100,
-        octet_count: 200,
-        reports: []
-      },
-      %ExRTCP.Packet.Goodbye{sources: [0x89A1FF87]}
-    ]
+      expected_packets = [
+        %ExRTCP.Packet.SenderReport{
+          ssrc: 0x89A1FF87,
+          ntp_timestamp: 0x1234567890ABCDEF,
+          rtp_timestamp: 123_456,
+          packet_count: 100,
+          octet_count: 200,
+          reports: []
+        },
+        %ExRTCP.Packet.Goodbye{sources: [0x89A1FF87]}
+      ]
 
-    assert unprotected_packets == expected_packets
+      assert unprotected_packets == expected_packets
+    end
+
+    test "fail on replayed rtcp", %{srtp: srtp} do
+      protected_rtcp =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
+
+      assert {:ok, _unprotected_packets, srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+      assert {:error, :replay} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+    end
   end
 
   for profile <- [:aes_cm_128_hmac_sha1_80, :aes_cm_128_hmac_sha1_32] do
@@ -121,7 +145,12 @@ defmodule ExSRTPTest do
         # keep the first packet in order to invalid initial ROC value
         [first_packet | original_packets] = original_packets
         [first_encrypted | encrypted_packets] = encrypted_packets
-        shuffled = original_packets |> Enum.zip(encrypted_packets) |> Enum.shuffle()
+
+        shuffled =
+          original_packets
+          |> Enum.zip(encrypted_packets)
+          |> Enum.chunk_every(64)
+          |> Enum.flat_map(&Enum.shuffle(&1))
 
         [{first_packet, first_encrypted} | shuffled]
         |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
