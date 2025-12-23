@@ -126,4 +126,13 @@ fn unprotect_rtcp<'a>(
     return Ok(Binary::from_owned(owned, env));
 }
 
+#[rustler::nif]
+fn rtp_index(state: ResourceArc<State>, ssrc: u32, sequence_number: u16) -> u64 {
+    state
+        .rtp_context
+        .lock()
+        .unwrap()
+        .index(ssrc, sequence_number)
+}
+
 rustler::init!("Elixir.ExSRTP.Backend.RustCrypto.Native", load = load);

@@ -131,7 +131,8 @@ defmodule ExSRTPTest do
         <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
           155, 23, 74, 128, 181, 142, 45>>
 
-      assert {:ok, ^packet, _srtp} = RustCrypto.unprotect(protected_packet, srtp)
+      assert {:ok, ^packet, srtp} = RustCrypto.unprotect(protected_packet, srtp)
+      assert {:error, :replay} = RustCrypto.unprotect(protected_packet, srtp)
     end
   end
 
@@ -211,17 +212,17 @@ defmodule ExSRTPTest do
         original_packets = packets(10000)
         {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
         encrypted_packets = Enum.map(encrypted_packets, &IO.iodata_to_binary/1)
+        packets = Enum.zip(original_packets, encrypted_packets)
 
-        original_packets
-        |> Enum.zip(encrypted_packets)
-        |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
+        Enum.reduce(packets, srtp, fn {original_packet, protected_packet}, srtp ->
           {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
-
-          {:ok, rust_unprotected_packet, _srtp} =
-            RustCrypto.unprotect(protected_packet, rust_srtp)
-
           assert unprotected_packet == original_packet
-          assert rust_unprotected_packet == original_packet
+          srtp
+        end)
+
+        Enum.reduce(packets, rust_srtp, fn {original_packet, protected_packet}, srtp ->
+          {:ok, unprotected_packet, srtp} = RustCrypto.unprotect(protected_packet, srtp)
+          assert unprotected_packet == original_packet
           srtp
         end)
       end
@@ -244,12 +245,14 @@ defmodule ExSRTPTest do
         [{first_packet, first_encrypted} | shuffled]
         |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
           {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
-
-          {:ok, rust_unprotected_packet, _srtp} =
-            RustCrypto.unprotect(protected_packet, rust_srtp)
-
           assert unprotected_packet == original_packet
-          assert rust_unprotected_packet == original_packet
+          srtp
+        end)
+
+        [{first_packet, first_encrypted} | shuffled]
+        |> Enum.reduce(rust_srtp, fn {original_packet, protected_packet}, srtp ->
+          {:ok, unprotected_packet, srtp} = RustCrypto.unprotect(protected_packet, srtp)
+          assert unprotected_packet == original_packet
           srtp
         end)
       end

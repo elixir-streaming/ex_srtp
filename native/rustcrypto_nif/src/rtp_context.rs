@@ -107,6 +107,18 @@ impl RTPContext {
         Ok(owned)
     }
 
+    pub fn index(&mut self, ssrc: u32, sequence_number: u16) -> u64 {
+        match self.in_ssrcs.get_mut(&ssrc) {
+            Some(ctx) => {
+                let roc = ctx.estimate_roc(sequence_number);
+                return ((roc as u64) << 16) | (sequence_number as u64);
+            }
+            None => {
+                return sequence_number as u64;
+            }
+        }
+    }
+
     fn calculate_auth_tag(&self, data: &[&[u8]]) -> Vec<u8> {
         let mut mac = HmacSha1::new_from_slice(self.auth_key.as_slice()).unwrap();
         for chunk in data {
