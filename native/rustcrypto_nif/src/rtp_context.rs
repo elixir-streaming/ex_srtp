@@ -104,11 +104,13 @@ impl RTPContext {
         Aes128Ctr::new(self.session_key.as_slice().into(), iv.as_slice().into())
             .apply_keystream(&mut owned.as_mut_slice());
 
+        self.in_ssrcs.get_mut(&ssrc).unwrap().update_roc(seq);
+
         Ok(owned)
     }
 
-    pub fn index(&mut self, ssrc: u32, sequence_number: u16) -> u64 {
-        match self.in_ssrcs.get_mut(&ssrc) {
+    pub fn index(&self, ssrc: u32, sequence_number: u16) -> u64 {
+        match self.in_ssrcs.get(&ssrc) {
             Some(ctx) => {
                 let roc = ctx.estimate_roc(sequence_number);
                 return ((roc as u64) << 16) | (sequence_number as u64);
@@ -136,33 +138,49 @@ impl SsrcContext {
         self.last_seq = seq;
     }
 
-    pub fn estimate_roc(&mut self, seq_number: u16) -> u32 {
+    pub fn estimate_roc(&self, seq_number: u16) -> u32 {
         let s_l = match self.s_l {
             Some(s_l) => s_l,
             None => {
-                self.s_l = Some(seq_number);
                 return self.roc;
             }
         };
 
-        let mut roc = self.roc;
-
         if s_l < 32_768 {
             if seq_number as i32 - s_l as i32 > 32_768 {
-                roc = roc.wrapping_sub(1);
+                return self.roc.wrapping_sub(1);
             } else {
+                return self.roc;
+            }
+        } else {
+            if s_l as i32 - 32_768 > seq_number as i32 {
+                return self.roc.wrapping_add(1);
+            } else {
+                return self.roc;
+            }
+        }
+    }
+
+    pub fn update_roc(&mut self, seq_number: u16) -> () {
+        let s_l = match self.s_l {
+            Some(s_l) => s_l,
+            None => {
+                self.s_l = Some(seq_number);
+                return;
+            }
+        };
+
+        if s_l < 32_768 {
+            if seq_number as i32 - s_l as i32 <= 32_768 {
                 self.s_l = Some(max(s_l, seq_number));
             }
         } else {
-            if s_l as i32 - 32_768 as i32 > seq_number as i32 {
-                roc = roc.wrapping_add(1);
-                self.roc = roc;
+            if s_l as i32 - 32_768 > seq_number as i32 {
+                self.roc = self.roc.wrapping_add(1);
                 self.s_l = Some(seq_number);
             } else {
                 self.s_l = Some(max(s_l, seq_number));
             }
         }
-
-        return roc;
     }
 }

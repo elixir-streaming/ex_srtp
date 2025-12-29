@@ -1,7 +1,5 @@
 defmodule ExSRTP do
-  @moduledoc """
-  Module implementing Secure Real-time Transport Protocol (SRTP) as per RFC 3711.
-  """
+  @moduledoc File.read!("README.md")
 
   import ExSRTP.Backend, only: [backend: 0]
 

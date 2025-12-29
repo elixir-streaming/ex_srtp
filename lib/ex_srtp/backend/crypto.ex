@@ -236,10 +236,13 @@ defmodule ExSRTP.Backend.Crypto do
     <<encrypted_data::binary-size(byte_size(data) - tag_size), tag::binary>> = data
 
     new_tag =
-      :crypto.mac_init(:hmac, :sha, session.rtp_auth_key)
-      |> :crypto.mac_update(encrypted_data)
-      |> :crypto.mac_update(<<roc::32>>)
-      |> :crypto.mac_finalN(tag_size)
+      :crypto.macN(
+        :hmac,
+        :sha,
+        session.rtp_auth_key,
+        [encrypted_data, <<roc::32>>],
+        tag_size
+      )
 
     if tag == new_tag, do: :ok, else: {:error, :auth_failed}
   end
