@@ -1,8 +1,5 @@
 name: Build precompiled NIFs
 
-env:
-  NIF_DIR: "native/ex_srtp"
-
 on:
   push:
     paths:
@@ -11,14 +8,16 @@ on:
     tags:
       - "*"
 
-defaults:
-  run:
-    working-directory: "native/ex_srtp"
-
 jobs:
   build_release:
     name: NIF ${{ matrix.nif }} - ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
+
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
     strategy:
       fail-fast: false
       matrix:
