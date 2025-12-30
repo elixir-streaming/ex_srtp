@@ -1,10 +1,12 @@
 [package]
-name = "rustcrypto_nif"
+name = "ex_srtp"
 version = "0.1.0"
 authors = []
 edition = "2021"
 
 [lib]
+name = "ex_srtp"
+path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -13,3 +15,8 @@ ctr = "0.9.2"
 hmac = "0.12.1"
 rustler = "0.37.2"
 sha1 = "0.10.6"
+
+[features]
+default = ["nif_version_2_15"]
+
+nif_version_2_15 = ["rustler/nif_version_2_15"]
