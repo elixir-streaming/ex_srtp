@@ -29,8 +29,9 @@ defmodule ExSRTP.MixProject do
     [
       {:ex_rtp, "~> 0.4.0"},
       {:ex_rtcp, "~> 0.4.0"},
-      {:ex_doc, "~> 0.30", only: :dev, runtime: false},
-      {:rustler, "~> 0.37", runtime: false}
+      {:rustler, "~> 0.37", runtime: false},
+      {:rustler_precompiled, "~> 0.8"},
+      {:ex_doc, "~> 0.30", only: :dev, runtime: false}
     ]
   end
 
