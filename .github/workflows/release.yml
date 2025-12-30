@@ -48,8 +48,6 @@ jobs:
             os: windows-2022
           - target: x86_64-pc-windows-msvc
             os: windows-2022
-    env:
-      RUSTLER_NIF_VERSION: ${{ matrix.nif }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
