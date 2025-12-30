@@ -78,6 +78,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ex_srtp"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "ctr",
+ "hmac",
+ "rustler",
+ "sha1",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -159,17 +170,6 @@ name = "regex-lite"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d942b98df5e658f56f20d592c7f868833fe38115e65c33003d8cd224b0155da"
-
-[[package]]
-name = "rustcrypto_nif"
-version = "0.1.0"
-dependencies = [
- "aes",
- "ctr",
- "hmac",
- "rustler",
- "sha1",
-]
 
 [[package]]
 name = "rustler"

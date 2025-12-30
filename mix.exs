@@ -36,6 +36,13 @@ defmodule ExSRTP.MixProject do
 
   def package do
     [
+      files: [
+        "lib",
+        "native",
+        "mix.exs",
+        "README.md",
+        "LICENSE"
+      ],
       maintainers: ["Billal Ghilas"],
       licenses: ["MIT"],
       links: %{

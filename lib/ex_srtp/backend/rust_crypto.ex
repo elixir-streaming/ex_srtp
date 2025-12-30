@@ -1,7 +1,7 @@
 defmodule ExSRTP.Backend.RustCrypto.Native do
   @moduledoc false
 
-  use Rustler, otp_app: :ex_srtp, crate: "rustcrypto_nif"
+  use Rustler, otp_app: :ex_srtp, crate: "ex_srtp"
 
   def init(_policy), do: :erlang.nif_error(:nif_not_loaded)
 
