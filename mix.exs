@@ -1,7 +1,7 @@
 defmodule ExSRTP.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
   @github_url "https://github.com/elixir-streaming/ex_srtp"
 
   def project do
@@ -40,6 +40,7 @@ defmodule ExSRTP.MixProject do
       files: [
         "lib",
         "native",
+        "checksun-*.exs",
         "mix.exs",
         "README.md",
         "LICENSE"
