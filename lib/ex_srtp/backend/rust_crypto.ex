@@ -6,7 +6,6 @@ defmodule ExSRTP.Backend.RustCrypto.Native do
     otp_app: :ex_srtp,
     crate: "ex_srtp",
     base_url: "https://github.com/elixir-streaming/ex_srtp/releases/download/v#{version}",
-    force_build: System.get_env("EXSRTP_BUILD_NIF") in ["1", "true"],
     version: version
 
   def init(_policy), do: :erlang.nif_error(:nif_not_loaded)
