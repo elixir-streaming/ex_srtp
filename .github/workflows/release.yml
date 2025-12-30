@@ -27,27 +27,27 @@ jobs:
         nif: ["2.16", "2.15"]
         job:
           - target: arm-unknown-linux-gnueabihf
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             use-cross: true
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             use-cross: true
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             use-cross: true
           - target: aarch64-apple-darwin
-            os: macos-11
+            os: macos-14
           - target: x86_64-apple-darwin
-            os: macos-11
+            os: macos-13
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-20.04
+            os: ubuntu-22.04
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             use-cross: true
           - target: x86_64-pc-windows-gnu
-            os: windows-2019
+            os: windows-2022
           - target: x86_64-pc-windows-msvc
-            os: windows-2019
+            os: windows-2022
     env:
       RUSTLER_NIF_VERSION: ${{ matrix.nif }}
     steps:
@@ -78,7 +78,7 @@ jobs:
           project-dir: ${{ env.NIF_DIR }}
 
       - name: Artifact upload
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.build-crate.outputs.file-name }}
           path: ${{ steps.build-crate.outputs.file-path }}
