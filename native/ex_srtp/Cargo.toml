@@ -17,4 +17,6 @@ rustler = "0.37.2"
 sha1 = "0.10.6"
 
 [features]
+default = ["nif_version_2_15"]
+
 nif_version_2_15 = ["rustler/nif_version_2_15"]
