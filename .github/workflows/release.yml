@@ -76,7 +76,8 @@ jobs:
           target: ${{ matrix.job.target }}
           nif-version: ${{ matrix.nif }}
           use-cross: ${{ matrix.job.use-cross }}
-          project-dir: ${{ env.NIF_DIR }}
+          cross-version: ${{ matrix.job.cross-version || 'from-source' }}
+          project-dir: "native/ex_srtp"
 
       - name: Artifact upload
         uses: actions/upload-artifact@v4
