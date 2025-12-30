@@ -5,13 +5,13 @@ env:
 
 on:
   push:
-    branches:
-      - master
-    paths:
-      - "native/ex_srtp/**"
-      - ".github/workflows/release.yml"
-    tags:
-      - "*"
+    # branches:
+    #   - master
+    # paths:
+    #   - "native/ex_srtp/**"
+    #   - ".github/workflows/release.yml"
+    # tags:
+    #   - "*"
 
 defaults:
   run:
