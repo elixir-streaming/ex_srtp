@@ -52,7 +52,7 @@ jobs:
       RUSTLER_NIF_VERSION: ${{ matrix.nif }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
 
@@ -61,12 +61,6 @@ jobs:
         run: |
           # Get the project version from mix.exs
           echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> $GITHUB_ENV
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.job.target }}
 
       - name: Add target
         shell: bash
