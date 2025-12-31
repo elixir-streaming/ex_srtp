@@ -52,13 +52,20 @@ defmodule ExSRTP.Policy do
                 rtcp_replay_window_size: 128
               ]
 
-  @spec new(master_key :: binary(), master_salt :: binary()) :: t()
-  def new(master_key, master_salt \\ <<0::96>>) do
-    %__MODULE__{
-      master_key: master_key,
-      master_salt: master_salt
-    }
+  @doc false
+  @spec new(key :: binary(), profile :: profile()) :: {:ok, t()} | {:error, term()}
+  def new(key, profile) when profile in @profiles do
+    with {:ok, master, salt} <- get_master_and_salt(profile, key) do
+      %__MODULE__{
+        master_key: master,
+        master_salt: salt,
+        rtp_profile: profile,
+        rtcp_profile: profile
+      }
+    end
   end
+
+  def new(_key, _profile), do: {:error, :invalid_profile}
 
   @doc false
   def set_defaults(%__MODULE__{} = policy) do
@@ -90,4 +97,12 @@ defmodule ExSRTP.Policy do
   end
 
   def validate(_policy), do: :ok
+
+  defp get_master_and_salt(_profile, key) do
+    case byte_size(key) do
+      30 -> {:ok, binary_part(key, 0, 16), binary_part(key, 16, 14)}
+      16 -> {:ok, key, <<0::96>>}
+      _ -> {:error, :invalid_key_size}
+    end
+  end
 end

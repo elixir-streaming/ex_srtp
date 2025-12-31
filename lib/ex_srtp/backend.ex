@@ -32,7 +32,17 @@ defmodule ExSRTP.Backend do
   @callback unprotect_rtcp(binary(), state()) ::
               {:ok, [ExRTCP.Packet.packet()], state()} | {:error, term()}
 
+  @compile {:inline, backend: 0}
+  @doc false
   def backend do
-    Application.get_env(:ex_srtp, :backend, ExSRTP.Backend.Crypto)
+    case Process.get(:srtp_backend) do
+      nil ->
+        backend = Application.get_env(:ex_srtp, :backend, ExSRTP.Backend.Crypto)
+        Process.put(:srtp_backend, backend)
+        backend
+
+      backend ->
+        backend
+    end
   end
 end
