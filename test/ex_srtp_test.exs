@@ -1,6 +1,9 @@
 defmodule ExSRTPTest do
   use ExUnit.Case, async: true
 
+  doctest ExSRTP
+  doctest ExSRTP.Policy
+
   alias ExSRTP.Backend.RustCrypto
 
   @key "mysecretkey12345"
@@ -47,7 +50,8 @@ defmodule ExSRTPTest do
   describe "new" do
     test "creates srtp session" do
       assert {:ok, _srtp} = ExSRTP.new(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
-      assert %ExSRTP{} = ExSRTP.new!(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
+      srtp = ExSRTP.new!(%ExSRTP.Policy{master_key: @key, master_salt: @salt})
+      assert srtp != nil
     end
 
     test "fails with invalid key length" do

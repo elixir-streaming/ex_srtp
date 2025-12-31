@@ -11,8 +11,7 @@ defmodule ExSRTP.Policy do
     - `master_key` (binary): The master key used for encryption and authentication.
       Must be 16 bytes long.
 
-    - `master_salt` (binary | nil): The master salt used in key derivation.
-      Must be 14 bytes long if provided. Defaults to a zeroed 96-bit salt if not specified.
+    - `master_salt` (binary | nil): The master salt used in key derivation. Defaults to 0.
 
     - `rtp_profile` (profile | nil): The SRTP profile for RTP packets.
       Can be either `:aes_cm_128_hmac_sha1_80` or `:aes_cm_128_hmac_sha1_32`.
@@ -52,13 +51,58 @@ defmodule ExSRTP.Policy do
                 rtcp_replay_window_size: 128
               ]
 
-  @spec new(master_key :: binary(), master_salt :: binary()) :: t()
-  def new(master_key, master_salt \\ <<0::96>>) do
-    %__MODULE__{
-      master_key: master_key,
-      master_salt: master_salt
-    }
+  @doc """
+  Relevant specification: https://www.iana.org/assignments/srtp-protection/srtp-protection.xhtml
+
+      iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(0x01)
+      {:ok, :aes_cm_128_hmac_sha1_80}
+
+      iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(0x02)
+      {:ok, :aes_cm_128_hmac_sha1_32}
+
+      iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(0x03)
+      {:error, :unsupported_crypto_profile}
+
+      iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile({0x00, 0x01})
+      {:ok, :aes_cm_128_hmac_sha1_80}
+
+      iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile({0x00, 0x03})
+      {:error, :unsupported_crypto_profile}
+  """
+  @spec crypto_profile_from_dtls_srtp_protection_profile(
+          value :: pos_integer() | {pos_integer(), pos_integer()}
+        ) :: {:ok, profile()} | {:error, :unsupported_crypto_profile}
+  def crypto_profile_from_dtls_srtp_protection_profile(0x01), do: {:ok, :aes_cm_128_hmac_sha1_80}
+  def crypto_profile_from_dtls_srtp_protection_profile(0x02), do: {:ok, :aes_cm_128_hmac_sha1_32}
+
+  def crypto_profile_from_dtls_srtp_protection_profile(b) when is_number(b) do
+    {:error, :unsupported_crypto_profile}
   end
+
+  def crypto_profile_from_dtls_srtp_protection_profile({0x00, b}) when is_number(b) do
+    crypto_profile_from_dtls_srtp_protection_profile(b)
+  end
+
+  def crypto_profile_from_dtls_srtp_protection_profile({a, b})
+      when is_number(a) and is_number(b) do
+    {:error, :unsupported_crypto_profile}
+  end
+
+  @doc false
+  @spec new(key :: binary(), profile :: profile()) :: {:ok, t()} | {:error, term()}
+  def new(key, profile) when profile in @profiles do
+    with {:ok, master, salt} <- get_master_and_salt(profile, key) do
+      {:ok,
+       %__MODULE__{
+         master_key: master,
+         master_salt: salt,
+         rtp_profile: profile,
+         rtcp_profile: profile
+       }}
+    end
+  end
+
+  def new(_key, _profile), do: {:error, :invalid_profile}
 
   @doc false
   def set_defaults(%__MODULE__{} = policy) do
@@ -66,7 +110,7 @@ defmodule ExSRTP.Policy do
 
     %{
       policy
-      | master_salt: policy.master_salt || <<0::96>>,
+      | master_salt: policy.master_salt || <<0::112>>,
         rtp_profile: rtp_profile,
         rtcp_profile: policy.rtcp_profile || rtp_profile
     }
@@ -90,4 +134,12 @@ defmodule ExSRTP.Policy do
   end
 
   def validate(_policy), do: :ok
+
+  defp get_master_and_salt(_profile, key) do
+    case byte_size(key) do
+      30 -> {:ok, binary_part(key, 0, 16), binary_part(key, 16, 14)}
+      16 -> {:ok, key, <<0::112>>}
+      _ -> {:error, :invalid_key_size}
+    end
+  end
 end
