@@ -13,7 +13,19 @@ It implements the following references:
 
 The library supports multiple backends for cryptographic operations:
 * `elixir` - Using Erlang's built-in crypto module (default)
-* `rust` - A Rust-based backend for improved performance (requires Rust toolchain)
+* `rust` - A Rust-based backend for improved performance.
+
+## Rust Backend
+
+For the rust backend, we offer precompiled NIFs for various platforms, so if your platform is supported, you can use the rust backend without needing to compile anything. However, if your platform is not supported or you want to compile from source, you need to have the rust toolchain installed on your system. You need aslo to add `rustler` dependency and set force build config:
+
+```elixir
+{:rustler, "~> 0.37.0"}
+```
+
+```elixir
+config :rust_precompiled, :force_build, ex_srtp: true
+```
 
 ## Installation
 
@@ -22,6 +34,7 @@ The package can be installed by adding `ex_srtp` to your list of dependencies in
 ```elixir
 def deps do
   [
+    {:rustler, "~> 0.37", runtime: false} # Optional, if you want to compile the rust backend from source
     {:ex_srtp, "~> 0.3.0"}
   ]
 end
