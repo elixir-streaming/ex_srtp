@@ -26,7 +26,7 @@ defmodule ExSRTP do
       iex> srtp != nil
       true
 
-      iex> {:ok, srtp} = ExSRTP.new(<<1::128, 2::96>>, :aes_cm_128_hmac_sha1_80)
+      iex> {:ok, srtp} = ExSRTP.new(<<1::128, 2::112>>, :aes_cm_128_hmac_sha1_80)
       iex> srtp != nil
       true
 
@@ -34,7 +34,7 @@ defmodule ExSRTP do
       {:error, :invalid_profile}
 
       iex> ExSRTP.new(<<2::64>>, :aes_cm_128_hmac_sha1_80)
-      {:error, :invalid_master_key_size}
+      {:error, :invalid_key_size}
   """
   @spec new(binary(), Policy.profile()) :: {:ok, t()} | {:error, term()}
   def new(key, profile) do

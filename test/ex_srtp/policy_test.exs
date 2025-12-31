@@ -6,7 +6,7 @@ defmodule ExSRTP.PolicyTest do
   test "set_defaults/1 sets default values" do
     policy = %Policy{master_key: "mysecretkey12345"}
     updated_policy = Policy.set_defaults(policy)
-    assert updated_policy.master_salt == <<0::96>>
+    assert updated_policy.master_salt == <<0::112>>
     assert updated_policy.rtp_profile == :aes_cm_128_hmac_sha1_80
     assert updated_policy.rtcp_profile == :aes_cm_128_hmac_sha1_80
   end

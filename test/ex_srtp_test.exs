@@ -1,6 +1,9 @@
 defmodule ExSRTPTest do
   use ExUnit.Case, async: true
 
+  doctest ExSRTP
+  doctest ExSRTP.Policy
+
   alias ExSRTP.Backend.RustCrypto
 
   @key "mysecretkey12345"
