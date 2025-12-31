@@ -11,8 +11,7 @@ defmodule ExSRTP.Policy do
     - `master_key` (binary): The master key used for encryption and authentication.
       Must be 16 bytes long.
 
-    - `master_salt` (binary | nil): The master salt used in key derivation.
-      Must be 14 bytes long if provided. Defaults to a zeroed 96-bit salt if not specified.
+    - `master_salt` (binary | nil): The master salt used in key derivation. Defaults to 0.
 
     - `rtp_profile` (profile | nil): The SRTP profile for RTP packets.
       Can be either `:aes_cm_128_hmac_sha1_80` or `:aes_cm_128_hmac_sha1_32`.
