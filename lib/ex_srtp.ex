@@ -55,6 +55,17 @@ defmodule ExSRTP do
   end
 
   @doc """
+  Same as `new/2` but raises an error in case of failure.
+  """
+  @spec new!(binary(), Policy.profile()) :: t()
+  def new!(key, profile) do
+    case new(key, profile) do
+      {:ok, srtp} -> srtp
+      {:error, reason} -> raise "Failed to create SRTP session: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
   Protects (encrypts and authenticates) an RTP packet.
   """
   @spec protect(ExRTP.Packet.t(), t()) :: ExSRTP.Backend.protect_return()
