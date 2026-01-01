@@ -28,7 +28,7 @@ impl RTCPContext {
         let master_salt = policy.master_salt.as_slice();
 
         return RTCPContext {
-            profile: policy.rtcp_profile.into(),
+            profile: policy.profile.into(),
             out_ssrcs: std::collections::HashMap::new(),
             session_key: aes_cm_key_derivation(master_key, master_salt, 0x3, 16),
             auth_key: aes_cm_key_derivation(master_key, master_salt, 0x4, 20),

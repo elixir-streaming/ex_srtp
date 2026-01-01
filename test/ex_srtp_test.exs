@@ -16,8 +16,7 @@ defmodule ExSRTPTest do
       RustCrypto.init(%ExSRTP.Policy{
         master_key: @key,
         master_salt: @salt,
-        rtp_profile: :aes_cm_128_hmac_sha1_80,
-        rtcp_profile: :aes_cm_128_hmac_sha1_80
+        profile: :aes_cm_128_hmac_sha1_80
       })
 
     packet = %ExRTP.Packet{
@@ -197,16 +196,14 @@ defmodule ExSRTPTest do
           ExSRTP.new!(%ExSRTP.Policy{
             master_key: @key,
             master_salt: @salt,
-            rtp_profile: unquote(profile),
-            rtcp_profile: unquote(profile)
+            profile: unquote(profile)
           })
 
         {:ok, rust_srtp} =
           RustCrypto.init(%ExSRTP.Policy{
             master_key: @key,
             master_salt: @salt,
-            rtp_profile: unquote(profile),
-            rtcp_profile: unquote(profile)
+            profile: unquote(profile)
           })
 
         {:ok, srtp: srtp, rust_srtp: rust_srtp}
@@ -268,16 +265,14 @@ defmodule ExSRTPTest do
           ExSRTP.new!(%ExSRTP.Policy{
             master_key: @key,
             master_salt: @salt,
-            rtp_profile: unquote(profile),
-            rtcp_profile: unquote(profile)
+            profile: unquote(profile)
           })
 
         {:ok, rust_srtp} =
           RustCrypto.init(%ExSRTP.Policy{
             master_key: @key,
             master_salt: @salt,
-            rtp_profile: unquote(profile),
-            rtcp_profile: unquote(profile)
+            profile: unquote(profile)
           })
 
         {:ok, srtp: srtp, rust_srtp: rust_srtp}

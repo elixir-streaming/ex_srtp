@@ -53,7 +53,7 @@ defmodule ExSRTP.Backend.RustCrypto do
     {:ok,
      %__MODULE__{
        native: Native.init(policy),
-       rtcp_profile: policy.rtcp_profile,
+       rtcp_profile: policy.profile,
        rtp_replay_window_size: policy.rtp_replay_window_size,
        rtcp_replay_window_size: policy.rtcp_replay_window_size
      }}
@@ -108,7 +108,13 @@ defmodule ExSRTP.Backend.RustCrypto do
 
   @impl ExSRTP.Backend
   def unprotect_rtcp(protected_packet, %{native: native} = session) do
-    {ssrc, index} = ExSRTP.Helper.rtcp_index(session.rtcp_profile, protected_packet)
+    tag_size =
+      case session.rtcp_profile do
+        :aes_cm_128_hmac_sha1_80 -> 10
+        :aes_cm_128_hmac_sha1_32 -> 4
+      end
+
+    {ssrc, index} = ExSRTP.Helper.rtcp_index(tag_size, protected_packet)
 
     replay_list =
       session.rtcp_replay_list[ssrc] || ReplayList.new(session.rtcp_replay_window_size)

@@ -31,7 +31,7 @@ impl RTPContext {
         let master_salt = policy.master_salt.as_slice();
 
         return RTPContext {
-            profile: policy.rtp_profile.into(),
+            profile: policy.profile.into(),
             out_ssrcs: HashMap::new(),
             in_ssrcs: HashMap::new(),
             session_key: aes_cm_key_derivation(master_key, master_salt, 0x0, 16),

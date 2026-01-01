@@ -11,23 +11,17 @@ defmodule ExSRTP.RTCPContext do
   @default_replay_window 64
 
   @type t :: %__MODULE__{
-          base_iv: non_neg_integer(),
           index: non_neg_integer(),
           replay: ReplayProtection.t() | nil
         }
 
-  defstruct [:base_iv, :replay, index: 1]
+  defstruct [:replay, index: 1]
 
   @doc false
-  @spec new(non_neg_integer(), binary()) :: t()
-  def new(ssrc, salt, replay_window \\ @default_replay_window) do
-    base_iv =
-      <<salt::binary, 0::16>>
-      |> :crypto.exor(<<ssrc::64, 0::64>>)
-      |> :crypto.bytes_to_integer()
-
+  @spec new() :: t()
+  @spec new(non_neg_integer()) :: t()
+  def new(replay_window \\ @default_replay_window) do
     %__MODULE__{
-      base_iv: base_iv,
       replay: ReplayList.new(replay_window)
     }
   end
