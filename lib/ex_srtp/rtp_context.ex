@@ -15,23 +15,17 @@ defmodule ExSRTP.RTPContext do
   @type t :: %__MODULE__{
           roc: non_neg_integer(),
           s_l: non_neg_integer() | nil,
-          base_iv: non_neg_integer(),
           last_seq: non_neg_integer(),
           rtp_replay: ReplayProtection.t() | nil
         }
 
-  defstruct [:s_l, :base_iv, :rtp_replay, last_seq: 0, roc: 0]
+  defstruct [:s_l, :rtp_replay, last_seq: 0, roc: 0]
 
   @doc false
-  @spec new(non_neg_integer(), binary()) :: t()
-  def new(ssrc, rtp_salt, replay_window_size \\ @default_replay_window) do
-    base_iv =
-      <<rtp_salt::binary, 0::16>>
-      |> :crypto.exor(<<ssrc::64, 0::64>>)
-      |> :crypto.bytes_to_integer()
-
+  @spec new() :: t()
+  @spec new(non_neg_integer()) :: t()
+  def new(replay_window_size \\ @default_replay_window) do
     %__MODULE__{
-      base_iv: base_iv,
       rtp_replay: ReplayList.new(replay_window_size)
     }
   end
