@@ -55,6 +55,9 @@ defmodule ExSRTP.Policy do
       iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(0x02)
       {:ok, :aes_cm_128_hmac_sha1_32}
 
+      iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(0x07)
+      {:ok, :aes_gcm_128_16_auth}
+
       iex> ExSRTP.Policy.crypto_profile_from_dtls_srtp_protection_profile(0x03)
       {:error, :unsupported_crypto_profile}
 
@@ -69,6 +72,7 @@ defmodule ExSRTP.Policy do
         ) :: {:ok, profile()} | {:error, :unsupported_crypto_profile}
   def crypto_profile_from_dtls_srtp_protection_profile(0x01), do: {:ok, :aes_cm_128_hmac_sha1_80}
   def crypto_profile_from_dtls_srtp_protection_profile(0x02), do: {:ok, :aes_cm_128_hmac_sha1_32}
+  def crypto_profile_from_dtls_srtp_protection_profile(0x07), do: {:ok, :aes_gcm_128_16_auth}
 
   def crypto_profile_from_dtls_srtp_protection_profile(b) when is_number(b) do
     {:error, :unsupported_crypto_profile}
@@ -112,12 +116,16 @@ defmodule ExSRTP.Policy do
     {:error, :invalid_master_key_size}
   end
 
-  # def validate(%__MODULE__{master_salt: salt}) when byte_size(salt) != 14 do
-  #   {:error, :invalid_master_salt_size}
-  # end
-
   def validate(%__MODULE__{profile: profile}) when profile not in @profiles do
     {:error, :invalid_profile}
+  end
+
+  def validate(%__MODULE__{master_salt: salt, profile: profile}) do
+    if (profile == :aes_gcm_128_16_auth and byte_size(salt) == 12) or byte_size(salt) == 14 do
+      :ok
+    else
+      {:error, :invalid_master_salt_size}
+    end
   end
 
   def validate(_policy), do: :ok
