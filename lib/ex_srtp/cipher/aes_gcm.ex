@@ -77,7 +77,7 @@ defmodule ExSRTP.Cipher.AesGcm do
           cipher.rtcp_key,
           iv,
           plain_text,
-          <<header::binary, ssrc::32>>,
+          <<header::binary, ssrc::32, 1::1, index::31>>,
           true
         )
 
@@ -89,7 +89,7 @@ defmodule ExSRTP.Cipher.AesGcm do
       cipher_length = byte_size(data) - tag_length - 12
 
       <<header::binary-size(4), ssrc::32, cipher_text::binary-size(cipher_length),
-        auth_tag::binary-size(tag_length), _::1, index::31>> = data
+        auth_tag::binary-size(tag_length), e::1, index::31>> = data
 
       iv = bxor(ssrc <<< 48 ||| index, cipher.rtcp_salt)
       iv = <<iv::96>>
@@ -99,7 +99,7 @@ defmodule ExSRTP.Cipher.AesGcm do
              cipher.rtcp_key,
              iv,
              cipher_text,
-             <<header::binary, ssrc::32>>,
+             <<header::binary, ssrc::32, e::1, index::31>>,
              auth_tag,
              false
            ) do
