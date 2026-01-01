@@ -129,7 +129,7 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
           {:ok, rtcp_data}
 
         true ->
-          <<_::32, ssrc::32, encrypted_data::binary>> = rtcp_data
+          <<header::32, ssrc::32, encrypted_data::binary>> = rtcp_data
           iv = bxor(cipher.rtcp_salt, ssrc <<< 64 ||| index <<< 16)
 
           decrypted_data =
@@ -141,7 +141,7 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
               encrypt: false
             )
 
-          {:ok, decrypted_data}
+          {:ok, <<header::32, ssrc::32, decrypted_data::binary>>}
       end
     end
 

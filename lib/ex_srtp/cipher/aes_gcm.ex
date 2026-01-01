@@ -65,18 +65,56 @@ defmodule ExSRTP.Cipher.AesGcm do
       end
     end
 
-    def encrypt_rtcp(_cipher, _data, _index) do
-      raise "not implemented"
+    def encrypt_rtcp(cipher, data, index) do
+      <<header::binary-size(4), ssrc::32, plain_text::binary>> = data
+
+      iv = bxor(ssrc <<< 48 ||| index, cipher.rtcp_salt)
+      iv = <<iv::96>>
+
+      {cipher_text, auth_tag} =
+        :crypto.crypto_one_time_aead(
+          :aes_128_gcm,
+          cipher.rtcp_key,
+          iv,
+          plain_text,
+          <<header::binary, ssrc::32>>,
+          true
+        )
+
+      <<header::binary, ssrc::32, cipher_text::binary, auth_tag::binary, 1::1, index::31>>
     end
 
-    def decrypt_rtcp(_cipher, _data) do
-      raise "not implemented"
+    def decrypt_rtcp(cipher, data) do
+      tag_length = 16
+      cipher_length = byte_size(data) - tag_length - 12
+
+      <<header::binary-size(4), ssrc::32, cipher_text::binary-size(cipher_length),
+        auth_tag::binary-size(tag_length), _::1, index::31>> = data
+
+      iv = bxor(ssrc <<< 48 ||| index, cipher.rtcp_salt)
+      iv = <<iv::96>>
+
+      case :crypto.crypto_one_time_aead(
+             :aes_128_gcm,
+             cipher.rtcp_key,
+             iv,
+             cipher_text,
+             <<header::binary, ssrc::32>>,
+             auth_tag,
+             false
+           ) do
+        :error ->
+          {:error, :authentication_failed}
+
+        plain_text ->
+          {:ok, <<header::binary, ssrc::32, plain_text::binary>>}
+      end
     end
 
     def tag_size(_cipher), do: 0
 
     defp initialization_vector(salt, ssrc, roc, seq) do
-      iv = ssrc <<< 48 ||| roc <<< 32 ||| seq
+      iv = ssrc <<< 48 ||| roc <<< 16 ||| seq
       <<bxor(iv, salt)::96>>
     end
   end

@@ -96,8 +96,7 @@ defmodule ExSRTP.Backend.Crypto do
 
     with {:ok, ctx} <- RTCPContext.check_replay(ctx, index),
          {:ok, decrypted_data} <- Cipher.decrypt_rtcp(session.cipher, data),
-         full_packet <- <<binary_part(data, 0, 4)::binary, ssrc::32, decrypted_data::binary>>,
-         {:ok, packets} <- CompoundPacket.decode(full_packet) do
+         {:ok, packets} <- CompoundPacket.decode(decrypted_data) do
       session = %{
         session
         | in_rtcp_contexts: Map.put(session.in_rtcp_contexts, ssrc, ctx)
