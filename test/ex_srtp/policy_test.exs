@@ -17,7 +17,12 @@ defmodule ExSRTP.PolicyTest do
     end
 
     test "returns error for invalid master salt size" do
-      policy = %Policy{master_key: "mysecretkey12345", master_salt: "shortsalt"}
+      policy = %Policy{
+        master_key: "mysecretkey12345",
+        master_salt: "shortsalt",
+        profile: :aes_cm_128_hmac_sha1_80
+      }
+
       assert Policy.validate(policy) == {:error, :invalid_master_salt_size}
     end
 

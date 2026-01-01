@@ -14,7 +14,7 @@ aes = "0.8.4"
 ctr = "0.9.2"
 hmac = "0.12.1"
 rustler = "0.37.2"
-sha1 = "0.10.6"
+sha1 = { version = "0.10.6", features = ["asm"] }
 
 [features]
 default = ["nif_version_2_15"]

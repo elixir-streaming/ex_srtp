@@ -32,8 +32,17 @@ defmodule ExSRTP.Backend.Crypto do
 
   @impl true
   def init(%ExSRTP.Policy{} = policy) do
+    cipher =
+      case policy.profile do
+        :aes_gcm_128_16_auth ->
+          Cipher.AesGcm.new(policy.profile, policy.master_key, policy.master_salt)
+
+        profile ->
+          Cipher.AesCmHmacSha1.new(profile, policy.master_key, policy.master_salt)
+      end
+
     session = %__MODULE__{
-      cipher: Cipher.AesCmHmacSha1.new(policy.profile, policy.master_key, policy.master_salt),
+      cipher: cipher,
       rtp_replay_window_size: policy.rtp_replay_window_size,
       rtcp_replay_window_size: policy.rtcp_replay_window_size
     }
@@ -87,8 +96,7 @@ defmodule ExSRTP.Backend.Crypto do
 
     with {:ok, ctx} <- RTCPContext.check_replay(ctx, index),
          {:ok, decrypted_data} <- Cipher.decrypt_rtcp(session.cipher, data),
-         full_packet <- <<binary_part(data, 0, 4)::binary, ssrc::32, decrypted_data::binary>>,
-         {:ok, packets} <- CompoundPacket.decode(full_packet) do
+         {:ok, packets} <- CompoundPacket.decode(decrypted_data) do
       session = %{
         session
         | in_rtcp_contexts: Map.put(session.in_rtcp_contexts, ssrc, ctx)
@@ -119,4 +127,23 @@ defmodule ExSRTP.Backend.Crypto do
   defp get_ctx(:rtcp_out, _session, _ssrc), do: RTCPContext.new()
   defp get_ctx(:rtp_in, session, _ssrc), do: RTPContext.new(session.rtp_replay_window_size)
   defp get_ctx(:rtcp_in, session, _ssrc), do: RTCPContext.new(session.rtcp_replay_window_size)
+
+  defimpl Inspect do
+    import Inspect.Algebra
+
+    def inspect(%ExSRTP.Backend.Crypto{} = session, opts) do
+      concat([
+        "#ExSRTP.Backend.Crypto<",
+        to_doc(
+          %{
+            cipher: session.cipher.__struct__,
+            rtp_replay_window_size: session.rtp_replay_window_size,
+            rtcp_replay_window_size: session.rtcp_replay_window_size
+          },
+          opts
+        ),
+        ">"
+      ])
+    end
+  end
 end
