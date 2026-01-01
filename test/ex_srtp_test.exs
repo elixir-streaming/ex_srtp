@@ -192,12 +192,7 @@ defmodule ExSRTPTest do
   for profile <- [:aes_cm_128_hmac_sha1_80, :aes_cm_128_hmac_sha1_32] do
     describe "crypto backend: Protect/unprotect: #{profile}" do
       setup do
-        srtp =
-          ExSRTP.new!(%ExSRTP.Policy{
-            master_key: @key,
-            master_salt: @salt,
-            profile: unquote(profile)
-          })
+        srtp = ExSRTP.new!(@key <> @salt, unquote(profile))
 
         {:ok, rust_srtp} =
           RustCrypto.init(%ExSRTP.Policy{
@@ -210,10 +205,7 @@ defmodule ExSRTPTest do
       end
 
       test "protect and unprotect", %{srtp: srtp, rust_srtp: rust_srtp} do
-        original_packets = packets(10000)
-        {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
-        encrypted_packets = Enum.map(encrypted_packets, &IO.iodata_to_binary/1)
-        packets = Enum.zip(original_packets, encrypted_packets)
+        packets = generate_packets(ExSRTP, srtp, 10_000)
 
         Enum.reduce(packets, srtp, fn {original_packet, protected_packet}, srtp ->
           {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
@@ -229,29 +221,22 @@ defmodule ExSRTPTest do
       end
 
       test "protect and unprotect out of order", %{srtp: srtp, rust_srtp: rust_srtp} do
-        original_packets = packets(32_000)
-        {encrypted_packets, srtp} = Enum.map_reduce(original_packets, srtp, &ExSRTP.protect!/2)
-        encrypted_packets = Enum.map(encrypted_packets, &IO.iodata_to_binary/1)
-
-        # keep the first packet in order to invalid initial ROC value
-        [first_packet | original_packets] = original_packets
-        [first_encrypted | encrypted_packets] = encrypted_packets
+        # keep the first packet to avoid invalid initial ROC value
+        [first_packets | packets] = generate_packets(ExSRTP, srtp, 32_000)
 
         shuffled =
-          original_packets
-          |> Enum.zip(encrypted_packets)
+          packets
           |> Enum.chunk_every(64)
           |> Enum.flat_map(&Enum.shuffle(&1))
+          |> then(&[first_packets | &1])
 
-        [{first_packet, first_encrypted} | shuffled]
-        |> Enum.reduce(srtp, fn {original_packet, protected_packet}, srtp ->
+        Enum.reduce(shuffled, srtp, fn {original_packet, protected_packet}, srtp ->
           {unprotected_packet, srtp} = ExSRTP.unprotect!(protected_packet, srtp)
           assert unprotected_packet == original_packet
           srtp
         end)
 
-        [{first_packet, first_encrypted} | shuffled]
-        |> Enum.reduce(rust_srtp, fn {original_packet, protected_packet}, srtp ->
+        Enum.reduce(shuffled, rust_srtp, fn {original_packet, protected_packet}, srtp ->
           {:ok, unprotected_packet, srtp} = RustCrypto.unprotect(protected_packet, srtp)
           assert unprotected_packet == original_packet
           srtp
@@ -339,6 +324,18 @@ defmodule ExSRTPTest do
         end)
       end
     end
+  end
+
+  defp generate_packets(backend, state, count) do
+    original_packets = packets(count)
+
+    {encrypted_packets, _srtp} =
+      Enum.map_reduce(original_packets, state, fn packet, srtp ->
+        {:ok, encrypted_packet, srtp} = backend.protect(packet, srtp)
+        {IO.iodata_to_binary(encrypted_packet), srtp}
+      end)
+
+    Enum.zip(original_packets, encrypted_packets)
   end
 
   defp packets(size) do

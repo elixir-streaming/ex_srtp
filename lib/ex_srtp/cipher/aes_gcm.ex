@@ -6,7 +6,7 @@ defmodule ExSRTP.Cipher.AesGcm do
   import ExSRTP.KeyDerivation
 
   @type t :: %__MODULE__{
-          profile: :aes128_gcm | :aes256_gcm,
+          profile: :aes_gcm_128_16_auth,
           rtp_key: binary(),
           rtp_salt: binary(),
           rtcp_key: binary(),
