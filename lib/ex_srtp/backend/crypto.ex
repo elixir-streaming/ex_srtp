@@ -33,7 +33,7 @@ defmodule ExSRTP.Backend.Crypto do
   @impl true
   def init(%ExSRTP.Policy{} = policy) do
     session = %__MODULE__{
-      cipher: Cipher.AesCmHmacSha1.new(policy.rtp_profile, policy.master_key, policy.master_salt),
+      cipher: Cipher.AesCmHmacSha1.new(policy.profile, policy.master_key, policy.master_salt),
       rtp_replay_window_size: policy.rtp_replay_window_size,
       rtcp_replay_window_size: policy.rtcp_replay_window_size
     }
@@ -119,17 +119,4 @@ defmodule ExSRTP.Backend.Crypto do
   defp get_ctx(:rtcp_out, _session, _ssrc), do: RTCPContext.new()
   defp get_ctx(:rtp_in, session, _ssrc), do: RTPContext.new(session.rtp_replay_window_size)
   defp get_ctx(:rtcp_in, session, _ssrc), do: RTCPContext.new(session.rtcp_replay_window_size)
-
-  defimpl Inspect do
-    import Inspect.Algebra
-
-    def inspect(%ExSRTP.Backend.Crypto{} = session, _opts) do
-      concat([
-        "#ExSRTP.Backend.Crypto<",
-        "rtp_profile: #{inspect(session.rtp_profile)}, ",
-        "rtcp_profile: #{inspect(session.rtcp_profile)}, ",
-        ">"
-      ])
-    end
-  end
 end

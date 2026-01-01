@@ -13,13 +13,8 @@ defmodule ExSRTP.Policy do
 
     - `master_salt` (binary | nil): The master salt used in key derivation. Defaults to 0.
 
-    - `rtp_profile` (profile | nil): The SRTP profile for RTP packets.
-      Can be either `:aes_cm_128_hmac_sha1_80` or `:aes_cm_128_hmac_sha1_32`.
+    - `profile` (profile | nil): The SRTP profile for RTP and RTCP packets.
       Defaults to `:aes_cm_128_hmac_sha1_80` if not specified.
-
-    - `rtcp_profile` (profile | nil): The SRTP profile for RTCP packets.
-      Can be either `:aes_cm_128_hmac_sha1_80` or `:aes_cm_128_hmac_sha1_32`.
-      Defaults to the value of `rtp_profile` if not specified.
 
     - `rtp_replay_window_size` (non_neg_integer | nil): The size of the replay protection window for RTP packets.
       Defaults to 64 if not specified.
@@ -35,8 +30,7 @@ defmodule ExSRTP.Policy do
   @type t :: %__MODULE__{
           master_key: binary(),
           master_salt: binary() | nil,
-          rtp_profile: profile() | nil,
-          rtcp_profile: profile() | nil,
+          profile: profile() | nil,
           rtp_replay_window_size: non_neg_integer() | nil,
           rtcp_replay_window_size: non_neg_integer() | nil
         }
@@ -45,8 +39,7 @@ defmodule ExSRTP.Policy do
   defstruct @enforce_keys ++
               [
                 :master_salt,
-                :rtp_profile,
-                :rtcp_profile,
+                :profile,
                 rtp_replay_window_size: 64,
                 rtcp_replay_window_size: 128
               ]
@@ -96,8 +89,7 @@ defmodule ExSRTP.Policy do
        %__MODULE__{
          master_key: master,
          master_salt: salt,
-         rtp_profile: profile,
-         rtcp_profile: profile
+         profile: profile
        }}
     end
   end
@@ -106,13 +98,10 @@ defmodule ExSRTP.Policy do
 
   @doc false
   def set_defaults(%__MODULE__{} = policy) do
-    rtp_profile = policy.rtp_profile || :aes_cm_128_hmac_sha1_80
-
     %{
       policy
       | master_salt: policy.master_salt || <<0::112>>,
-        rtp_profile: rtp_profile,
-        rtcp_profile: policy.rtcp_profile || rtp_profile
+        profile: policy.profile || :aes_cm_128_hmac_sha1_80
     }
   end
 
@@ -125,12 +114,8 @@ defmodule ExSRTP.Policy do
     {:error, :invalid_master_salt_size}
   end
 
-  def validate(%__MODULE__{rtp_profile: profile}) when profile not in @profiles do
-    {:error, :invalid_rtp_profile}
-  end
-
-  def validate(%__MODULE__{rtcp_profile: profile}) when profile not in @profiles do
-    {:error, :invalid_rtcp_profile}
+  def validate(%__MODULE__{profile: profile}) when profile not in @profiles do
+    {:error, :invalid_profile}
   end
 
   def validate(_policy), do: :ok

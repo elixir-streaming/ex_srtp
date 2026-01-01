@@ -53,7 +53,7 @@ defmodule ExSRTP.Backend.RustCrypto do
     {:ok,
      %__MODULE__{
        native: Native.init(policy),
-       rtcp_profile: policy.rtcp_profile,
+       rtcp_profile: policy.profile,
        rtp_replay_window_size: policy.rtp_replay_window_size,
        rtcp_replay_window_size: policy.rtcp_replay_window_size
      }}

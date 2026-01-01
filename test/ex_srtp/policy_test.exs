@@ -7,8 +7,7 @@ defmodule ExSRTP.PolicyTest do
     policy = %Policy{master_key: "mysecretkey12345"}
     updated_policy = Policy.set_defaults(policy)
     assert updated_policy.master_salt == <<0::112>>
-    assert updated_policy.rtp_profile == :aes_cm_128_hmac_sha1_80
-    assert updated_policy.rtcp_profile == :aes_cm_128_hmac_sha1_80
+    assert updated_policy.profile == :aes_cm_128_hmac_sha1_80
   end
 
   describe "validate/1" do
@@ -23,18 +22,8 @@ defmodule ExSRTP.PolicyTest do
     end
 
     test "returns error for invalid rtp profile" do
-      policy = %Policy{master_key: "mysecretkey12345", rtp_profile: :invalid_profile}
-      assert Policy.validate(policy) == {:error, :invalid_rtp_profile}
-    end
-
-    test "returns error for invalid rtcp profile" do
-      policy = %Policy{
-        master_key: "mysecretkey12345",
-        rtp_profile: :aes_cm_128_hmac_sha1_80,
-        rtcp_profile: :invalid_profile
-      }
-
-      assert Policy.validate(policy) == {:error, :invalid_rtcp_profile}
+      policy = %Policy{master_key: "mysecretkey12345", profile: :invalid_profile}
+      assert Policy.validate(policy) == {:error, :invalid_profile}
     end
   end
 end

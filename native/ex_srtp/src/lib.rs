@@ -55,8 +55,7 @@ impl Resource for State {}
 struct SrtpPolicy<'a> {
     pub master_key: Binary<'a>,
     pub master_salt: Binary<'a>,
-    pub rtp_profile: Atom,
-    pub rtcp_profile: Atom,
+    pub profile: Atom,
 }
 
 fn load(env: Env, _: Term) -> bool {
