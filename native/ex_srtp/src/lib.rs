@@ -120,14 +120,6 @@ fn unprotect<'a>(
         .decrypt_rtp(&header.as_slice(), &payload.as_slice(), roc)?;
 
     session.in_rtp_ctx.get_mut(&ssrc).unwrap().update_roc(seq);
-
-    // let owned = state
-    //     .rtp_context
-    //     .lock()
-    //     .unwrap()
-    //     .unprotect(&header.as_slice(), &payload.as_slice())
-    //     .map_err(|e| e.to_string())?;
-
     return Ok(Binary::from_owned(owned, env));
 }
 
