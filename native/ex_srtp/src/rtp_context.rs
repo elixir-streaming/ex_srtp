@@ -7,6 +7,10 @@ pub(crate) struct RTPContext {
     s_l: Option<u16>,
 }
 
+pub(crate) struct RTCPContext {
+    pub index: u32,
+}
+
 impl RTPContext {
     pub fn inc_roc(&mut self, seq: u16) -> u32 {
         if seq < self.last_seq {

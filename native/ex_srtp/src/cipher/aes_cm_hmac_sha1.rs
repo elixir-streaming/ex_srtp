@@ -8,33 +8,41 @@ use crate::{
 };
 
 pub(crate) struct AesCmHmacSha1Cipher {
-    pub profile: ProtectionProfile,
-    pub rtp_session_key: Vec<u8>,
-    pub rtcp_session_key: Vec<u8>,
-    pub rtp_salt: Vec<u8>,
-    pub rtcp_salt: Vec<u8>,
-    pub rtp_auth_key: Vec<u8>,
-    pub rtcp_auth_key: Vec<u8>,
+    profile: ProtectionProfile,
+    rtp_session_key: Vec<u8>,
+    rtcp_session_key: Vec<u8>,
+    rtp_salt: Vec<u8>,
+    rtcp_salt: Vec<u8>,
+    rtcp_auth_key: Vec<u8>,
+    rtp_hasher: HmacSha1,
 }
 
 impl AesCmHmacSha1Cipher {
     pub fn new(profile: ProtectionProfile, master_key: &[u8], master_salt: &[u8]) -> Self {
+        let rtp_auth_key = aes_cm_key_derivation(master_key, master_salt, 0x1, 20);
+
         AesCmHmacSha1Cipher {
             profile,
             rtp_session_key: aes_cm_key_derivation(master_key, master_salt, 0x0, 16),
-            rtp_auth_key: aes_cm_key_derivation(master_key, master_salt, 0x1, 20),
             rtp_salt: aes_cm_key_derivation(master_key, master_salt, 0x2, 14),
             rtcp_session_key: aes_cm_key_derivation(master_key, master_salt, 0x3, 16),
             rtcp_auth_key: aes_cm_key_derivation(master_key, master_salt, 0x4, 20),
             rtcp_salt: aes_cm_key_derivation(master_key, master_salt, 0x5, 14),
+            rtp_hasher: HmacSha1::new_from_slice(&rtp_auth_key.as_slice()).unwrap(),
         }
     }
 
-    fn calculate_auth_tag(&self, data: &[&[u8]]) -> Vec<u8> {
-        let mut mac = HmacSha1::new_from_slice(self.rtp_auth_key.as_slice()).unwrap();
+    fn generate_rtp_auth_tag(&self, data: &[&[u8]]) -> Vec<u8> {
+        let mut mac = self.rtp_hasher.clone();
         for chunk in data {
             mac.update(chunk);
         }
+        return mac.finalize().into_bytes()[..self.profile.tag_size()].to_vec();
+    }
+
+    fn generate_rtcp_auth_tag(&self, data: &[u8]) -> Vec<u8> {
+        let mut mac = HmacSha1::new_from_slice(self.rtcp_auth_key.as_slice()).unwrap();
+        mac.update(data);
         return mac.finalize().into_bytes()[..self.profile.tag_size()].to_vec();
     }
 
@@ -43,6 +51,18 @@ impl AesCmHmacSha1Cipher {
         iv[4..8].copy_from_slice(&header[8..12]);
         iv[8..12].copy_from_slice(&roc.to_be_bytes());
         iv[12..14].copy_from_slice(&header[2..4]);
+
+        for i in 0..salt.len() {
+            iv[i] ^= salt[i];
+        }
+
+        iv
+    }
+
+    fn rtcp_initialization_vector(salt: &[u8], ssrc: u32, index: u32) -> [u8; 16] {
+        let mut iv = [0u8; 16];
+        iv[4..8].copy_from_slice(&ssrc.to_be_bytes());
+        iv[10..14].copy_from_slice(&index.to_be_bytes());
 
         for i in 0..salt.len() {
             iv[i] ^= salt[i];
@@ -64,7 +84,7 @@ impl Cipher for AesCmHmacSha1Cipher {
         Aes128Ctr::new(self.rtp_session_key.as_slice().into(), &iv.into())
             .apply_keystream(&mut owned_binary[header.len()..header.len() + payload.len()]);
 
-        let auth_tag = self.calculate_auth_tag(&[
+        let auth_tag = self.generate_rtp_auth_tag(&[
             &header,
             &owned_binary.as_slice()[header.len()..header.len() + payload.len()],
             &roc.to_be_bytes(),
@@ -82,7 +102,7 @@ impl Cipher for AesCmHmacSha1Cipher {
     ) -> Result<OwnedBinary, String> {
         let (encrypted_data, auth_tag) = payload.split_at(payload.len() - self.profile.tag_size());
         let expected_tag =
-            self.calculate_auth_tag(&[&header[..], &encrypted_data[..], &roc.to_be_bytes()[..]]);
+            self.generate_rtp_auth_tag(&[&header[..], &encrypted_data[..], &roc.to_be_bytes()[..]]);
 
         if auth_tag != expected_tag.as_slice() {
             return Err("authentication_failed".to_string());
@@ -100,5 +120,61 @@ impl Cipher for AesCmHmacSha1Cipher {
             .apply_keystream(&mut owned_binary.as_mut_slice());
 
         return Ok(owned_binary);
+    }
+
+    fn encrypt_rtcp(&mut self, compound_packet: &[u8], index: u32) -> OwnedBinary {
+        let ssrc = u32::from_be_bytes(compound_packet[4..8].try_into().unwrap());
+        let mut index_bytes = index.to_be_bytes();
+        index_bytes[0] |= 0x80;
+
+        let size = compound_packet.len() + self.profile.tag_size() + 4;
+        let mut owned_binary = OwnedBinary::new(size).unwrap();
+        let slice = owned_binary.as_mut_slice();
+
+        slice[..compound_packet.len()].copy_from_slice(compound_packet);
+        slice[compound_packet.len()..compound_packet.len() + 4].copy_from_slice(&index_bytes);
+
+        let iv = Self::rtcp_initialization_vector(&self.rtcp_salt, ssrc, index);
+        Aes128Ctr::new(self.rtcp_session_key.as_slice().into(), &iv.into())
+            .apply_keystream(&mut slice[8..compound_packet.len()]);
+
+        let auth_tag = self.generate_rtcp_auth_tag(&slice[..compound_packet.len() + 4]);
+
+        slice[compound_packet.len() + 4..].copy_from_slice(&auth_tag);
+        return owned_binary;
+    }
+
+    fn decrypt_rtcp(&mut self, compound_packet: &[u8]) -> Result<OwnedBinary, String> {
+        let tag_size = self.profile.tag_size();
+        let (data, auth_tag) = compound_packet.split_at(compound_packet.len() - tag_size);
+
+        let expected_tag = self.generate_rtcp_auth_tag(data);
+        if auth_tag != expected_tag.as_slice() {
+            return Err("authentication_failed".to_string());
+        }
+
+        let (header, rest) = data.split_at(8);
+        let (encrypted_data, index_bytes) = rest.split_at(rest.len() - 4);
+        let ssrc = u32::from_be_bytes(header[4..8].try_into().unwrap());
+        let mut index = u32::from_be_bytes(index_bytes.try_into().unwrap());
+
+        if index_bytes[0] & 0x80 == 0 {
+            let mut owned_binary = OwnedBinary::new(data.len()).unwrap();
+            owned_binary.as_mut_slice().copy_from_slice(data);
+            return Ok(owned_binary);
+        }
+
+        index &= 0x7FFFFFFF;
+
+        let size = header.len() + encrypted_data.len();
+        let mut owned_binary = OwnedBinary::new(size).unwrap();
+        owned_binary.as_mut_slice()[..header.len()].copy_from_slice(header);
+        owned_binary.as_mut_slice()[header.len()..].copy_from_slice(encrypted_data);
+
+        let iv = Self::rtcp_initialization_vector(&self.rtcp_salt, ssrc, index);
+        Aes128Ctr::new(self.rtcp_session_key.as_slice().into(), &iv.into())
+            .apply_keystream(&mut owned_binary.as_mut_slice()[header.len()..]);
+
+        Ok(owned_binary)
     }
 }

@@ -29,4 +29,8 @@ pub(crate) trait Cipher {
         payload: &[u8],
         roc: u32,
     ) -> Result<OwnedBinary, String>;
+
+    fn encrypt_rtcp(&mut self, compound_packet: &[u8], index: u32) -> OwnedBinary;
+
+    fn decrypt_rtcp(&mut self, compound_packet: &[u8]) -> Result<OwnedBinary, String>;
 }

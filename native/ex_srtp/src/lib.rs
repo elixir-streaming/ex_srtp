@@ -3,12 +3,14 @@ use std::{collections::HashMap, sync::Mutex};
 use hmac::Hmac;
 use rustler::{atoms, Atom, Binary, Env, NifStruct, Resource, ResourceArc, Term};
 
-use crate::{cipher::Cipher, rtcp_context::RTCPContext, rtp_context::RTPContext};
+use crate::{
+    cipher::Cipher,
+    rtp_context::{RTCPContext, RTPContext},
+};
 
 pub mod cipher;
 pub mod key_derivation;
 pub mod protection_profile;
-pub mod rtcp_context;
 pub mod rtp_context;
 
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
@@ -23,10 +25,10 @@ struct Session {
     cipher: Box<dyn Cipher + Send>,
     in_rtp_ctx: HashMap<u32, RTPContext>,
     out_rtp_ctx: HashMap<u32, RTPContext>,
+    out_rtcp_ctx: HashMap<u32, RTCPContext>,
 }
 
 struct State {
-    rtcp_context: Mutex<RTCPContext>,
     session: Mutex<Session>,
 }
 
@@ -47,11 +49,11 @@ fn load(env: Env, _: Term) -> bool {
 #[rustler::nif]
 fn init(policy: SrtpPolicy) -> ResourceArc<State> {
     ResourceArc::new(State {
-        rtcp_context: Mutex::new(RTCPContext::new(&policy)),
         session: Mutex::new(Session {
             cipher: cipher::create_cipher(&policy),
             in_rtp_ctx: HashMap::new(),
             out_rtp_ctx: HashMap::new(),
+            out_rtcp_ctx: HashMap::new(),
         }),
     })
 }
@@ -83,8 +85,16 @@ fn protect<'a>(
 
 #[rustler::nif]
 fn protect_rtcp<'a>(env: Env<'a>, state: ResourceArc<State>, data: Binary<'a>) -> Binary<'a> {
-    let owned = state.rtcp_context.lock().unwrap().protect(&data.as_slice());
-    return Binary::from_owned(owned, env);
+    let mut session = state.session.lock().unwrap();
+    let ssrc = u32::from_be_bytes(data.as_slice()[4..8].try_into().unwrap());
+    let ctx = session
+        .out_rtcp_ctx
+        .entry(ssrc)
+        .or_insert_with(|| RTCPContext { index: 0 });
+
+    ctx.index = ctx.index.wrapping_add(1);
+    let rtcp_index = ctx.index;
+    return Binary::from_owned(session.cipher.encrypt_rtcp(&data, rtcp_index), env);
 }
 
 #[rustler::nif]
@@ -127,13 +137,8 @@ fn unprotect_rtcp<'a>(
     state: ResourceArc<State>,
     data: Binary<'a>,
 ) -> Result<Binary<'a>, String> {
-    let owned = state
-        .rtcp_context
-        .lock()
-        .unwrap()
-        .unprotect(&data.as_slice())
-        .map_err(|e| e.to_string())?;
-
+    let mut session = state.session.lock().unwrap();
+    let owned = session.cipher.decrypt_rtcp(&data.as_slice())?;
     return Ok(Binary::from_owned(owned, env));
 }
 
