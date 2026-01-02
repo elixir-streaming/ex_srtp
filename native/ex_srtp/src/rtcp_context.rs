@@ -2,7 +2,10 @@ use aes::cipher::{KeyIvInit, StreamCipher};
 use hmac::Mac;
 use rustler::OwnedBinary;
 
-use crate::{key_derivation::aes_cm_key_derivation, Aes128Ctr, HmacSha1, ProtectionProfile};
+use crate::{
+    key_derivation::aes_cm_key_derivation, protection_profile::ProtectionProfile, Aes128Ctr,
+    HmacSha1,
+};
 
 pub(crate) struct RTCPContext {
     profile: ProtectionProfile,
