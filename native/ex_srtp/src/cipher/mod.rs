@@ -3,6 +3,7 @@ use rustler::OwnedBinary;
 use crate::protection_profile::ProtectionProfile;
 
 pub mod aes_cm_hmac_sha1;
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 pub mod aes_gcm;
 
 pub(crate) fn create_cipher(policy: &crate::SrtpPolicy) -> Box<dyn Cipher + Send> {
@@ -19,8 +20,14 @@ pub(crate) fn create_cipher(policy: &crate::SrtpPolicy) -> Box<dyn Cipher + Send
             ))
         }
 
+        #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
         ProtectionProfile::AesGcm128_16 => {
             Box::new(aes_gcm::AesGcmCipher::new(profile, master_key, master_salt))
+        }
+
+        #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+        ProtectionProfile::AesGcm128_16 => {
+            panic!("AES-GCM is only supported on aarch64 and x86_64 architectures")
         }
     }
 }

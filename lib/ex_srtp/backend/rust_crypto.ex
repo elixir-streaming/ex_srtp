@@ -112,6 +112,7 @@ defmodule ExSRTP.Backend.RustCrypto do
       case session.rtcp_profile do
         :aes_cm_128_hmac_sha1_80 -> 10
         :aes_cm_128_hmac_sha1_32 -> 4
+        :aes_gcm_128_16_auth -> 0
       end
 
     {ssrc, index} = ExSRTP.Helper.rtcp_index(tag_size, protected_packet)

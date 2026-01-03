@@ -8,6 +8,14 @@ Secure Real-time Transport Control Protocol (SRTCP).
 
 It implements the following references:
 * [RFC 3711 - The Secure Real-time Transport Protocol (SRTP)](https://tools.ietf.org/html/rfc3711).
+* [RFC 7714 - AES-GCM Authenticated Encryption in the Secure Real-time Transport Protocol](https://datatracker.ietf.org/doc/html/rfc7714)
+
+## Supported Crypto Profiles
+
+The library currently supports the following SRTP crypto profiles:
+* AES_CM_128_HMAC_SHA1_80
+* AES_CM_128_HMAC_SHA1_32
+* AES_GCM_128
 
 ## Backends
 
@@ -26,6 +34,9 @@ For the rust backend, we offer precompiled NIFs for various platforms, so if you
 ```elixir
 config :rust_precompiled, :force_build, ex_srtp: true
 ```
+
+### Rust Backend and AES-GCM
+The rust backend is using [graviola](https://github.com/ctz/graviola) for aes-gcm which only works on `aarch64` and `x86_64` architecture with some CPU features. If you are using an older CPU or different architecture, you should use the `elixir` backend or do not use AES_GCM crypto profile.
 
 ## Installation
 
