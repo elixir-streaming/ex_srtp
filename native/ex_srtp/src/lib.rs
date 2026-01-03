@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use hmac::Hmac;
-use rustler::{atoms, Atom, Binary, Env, NifStruct, Resource, ResourceArc, Term};
+use rustler::{Atom, Binary, Env, NifStruct, Resource, ResourceArc, Term};
 
 use crate::{
     cipher::Cipher,
@@ -15,11 +15,6 @@ pub mod rtp_context;
 
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 type HmacSha1 = Hmac<sha1::Sha1>;
-
-atoms! {
-    aes_cm_128_hmac_sha1_80,
-    aes_cm_128_hmac_sha1_32,
-}
 
 struct Session {
     cipher: Box<dyn Cipher + Send>,

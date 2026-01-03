@@ -3,6 +3,7 @@ use rustler::OwnedBinary;
 use crate::protection_profile::ProtectionProfile;
 
 pub mod aes_cm_hmac_sha1;
+pub mod aes_gcm;
 
 pub(crate) fn create_cipher(policy: &crate::SrtpPolicy) -> Box<dyn Cipher + Send> {
     let master_key = policy.master_key.as_slice();
@@ -16,6 +17,10 @@ pub(crate) fn create_cipher(policy: &crate::SrtpPolicy) -> Box<dyn Cipher + Send
                 master_key,
                 master_salt,
             ))
+        }
+
+        ProtectionProfile::AesGcm128_16 => {
+            Box::new(aes_gcm::AesGcmCipher::new(profile, master_key, master_salt))
         }
     }
 }

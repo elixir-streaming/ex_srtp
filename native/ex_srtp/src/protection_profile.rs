@@ -1,11 +1,16 @@
-use rustler::Atom;
+use rustler::{atoms, Atom};
 
-use crate::{aes_cm_128_hmac_sha1_32, aes_cm_128_hmac_sha1_80};
+atoms! {
+    aes_cm_128_hmac_sha1_80,
+    aes_cm_128_hmac_sha1_32,
+    aes_gcm_128_16_auth,
+}
 
 #[derive(Debug)]
-pub enum ProtectionProfile {
+pub(crate) enum ProtectionProfile {
     AesCm128HmacSha1_80,
     AesCm128HmacSha1_32,
+    AesGcm128_16,
 }
 
 impl From<Atom> for ProtectionProfile {
@@ -13,6 +18,7 @@ impl From<Atom> for ProtectionProfile {
         match atom {
             atom if aes_cm_128_hmac_sha1_80() == atom => ProtectionProfile::AesCm128HmacSha1_80,
             atom if aes_cm_128_hmac_sha1_32() == atom => ProtectionProfile::AesCm128HmacSha1_32,
+            atom if aes_gcm_128_16_auth() == atom => ProtectionProfile::AesGcm128_16,
             _ => panic!("Unsupported protection profile"),
         }
     }
@@ -23,6 +29,7 @@ impl ProtectionProfile {
         match self {
             ProtectionProfile::AesCm128HmacSha1_80 => 10,
             ProtectionProfile::AesCm128HmacSha1_32 => 4,
+            ProtectionProfile::AesGcm128_16 => 16,
         }
     }
 }
