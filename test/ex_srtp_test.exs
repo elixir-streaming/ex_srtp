@@ -189,15 +189,21 @@ defmodule ExSRTPTest do
     end
   end
 
-  for profile <- [:aes_cm_128_hmac_sha1_80, :aes_cm_128_hmac_sha1_32] do
+  for profile <- [:aes_cm_128_hmac_sha1_80, :aes_cm_128_hmac_sha1_32, :aes_gcm_128_16_auth] do
     describe "crypto backend: Protect/unprotect: #{profile}" do
       setup do
-        srtp = ExSRTP.new!(@key <> @salt, unquote(profile))
+        salt =
+          case unquote(profile) do
+            :aes_gcm_128_16_auth -> :binary.part(@salt, 0, 12)
+            _ -> @salt
+          end
+
+        srtp = ExSRTP.new!(@key <> salt, unquote(profile))
 
         {:ok, rust_srtp} =
           RustCrypto.init(%ExSRTP.Policy{
             master_key: @key,
-            master_salt: @salt,
+            master_salt: salt,
             profile: unquote(profile)
           })
 
@@ -241,6 +247,16 @@ defmodule ExSRTPTest do
           assert unprotected_packet == original_packet
           srtp
         end)
+      end
+
+      test "protect/unprotect rtcp", %{srtp: srtp, rust_srtp: rust_srtp, compound_packet: packets} do
+        {protected_rtcp, srtp} = ExSRTP.protect_rtcp!(packets, srtp)
+        {:ok, unprotected_rtcp, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+        assert unprotected_rtcp == packets
+
+        {:ok, protected_rtcp, rust_srtp} = RustCrypto.protect_rtcp(packets, rust_srtp)
+        {:ok, unprotected_rtcp, _rust_srtp} = RustCrypto.unprotect_rtcp(protected_rtcp, rust_srtp)
+        assert unprotected_rtcp == packets
       end
     end
 
@@ -322,6 +338,16 @@ defmodule ExSRTPTest do
           assert unprotected_packet == original_packet
           srtp
         end)
+      end
+
+      test "protect/unprotect rtcp", %{srtp: srtp, rust_srtp: rust_srtp, compound_packet: packets} do
+        {protected_rtcp, srtp} = ExSRTP.protect_rtcp!(packets, srtp)
+        {:ok, unprotected_rtcp, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+        assert unprotected_rtcp == packets
+
+        {:ok, protected_rtcp, rust_srtp} = RustCrypto.protect_rtcp(packets, rust_srtp)
+        {:ok, unprotected_rtcp, _rust_srtp} = RustCrypto.unprotect_rtcp(protected_rtcp, rust_srtp)
+        assert unprotected_rtcp == packets
       end
     end
   end
