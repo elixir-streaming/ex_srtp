@@ -248,6 +248,16 @@ defmodule ExSRTPTest do
           srtp
         end)
       end
+
+      test "protect/unprotect rtcp", %{srtp: srtp, rust_srtp: rust_srtp, compound_packet: packets} do
+        {protected_rtcp, srtp} = ExSRTP.protect_rtcp!(packets, srtp)
+        {:ok, unprotected_rtcp, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+        assert unprotected_rtcp == packets
+
+        {:ok, protected_rtcp, rust_srtp} = RustCrypto.protect_rtcp(packets, rust_srtp)
+        {:ok, unprotected_rtcp, _rust_srtp} = RustCrypto.unprotect_rtcp(protected_rtcp, rust_srtp)
+        assert unprotected_rtcp == packets
+      end
     end
 
     describe "rust backend: Protect/unprotect: #{profile}" do
@@ -328,6 +338,16 @@ defmodule ExSRTPTest do
           assert unprotected_packet == original_packet
           srtp
         end)
+      end
+
+      test "protect/unprotect rtcp", %{srtp: srtp, rust_srtp: rust_srtp, compound_packet: packets} do
+        {protected_rtcp, srtp} = ExSRTP.protect_rtcp!(packets, srtp)
+        {:ok, unprotected_rtcp, _srtp} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+        assert unprotected_rtcp == packets
+
+        {:ok, protected_rtcp, rust_srtp} = RustCrypto.protect_rtcp(packets, rust_srtp)
+        {:ok, unprotected_rtcp, _rust_srtp} = RustCrypto.unprotect_rtcp(protected_rtcp, rust_srtp)
+        assert unprotected_rtcp == packets
       end
     end
   end
