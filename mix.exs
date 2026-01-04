@@ -58,7 +58,24 @@ defmodule ExSRTP.MixProject do
       main: "readme",
       extras: ["README.md", "LICENSE"],
       formatters: ["html"],
-      source_ref: "v#{@version}"
+      source_ref: "v#{@version}",
+      groups_for_modules: [
+        SRTP: [
+          ExSRTP,
+          ExSRTP.Policy,
+          ExSRTP.ReplayList
+        ],
+        Backends: [
+          ExSRTP.Backend,
+          ExSRTP.Backend.Crypto,
+          ExSRTP.Backend.RustCrypto
+        ],
+        Ciphers: [
+          ExSRTP.Cipher,
+          ExSRTP.Cipher.AesCmHmacSha1,
+          ExSRTP.Cipher.AesGcm
+        ]
+      ]
     ]
   end
 end
