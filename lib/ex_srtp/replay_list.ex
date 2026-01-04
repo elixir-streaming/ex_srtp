@@ -1,5 +1,7 @@
 defmodule ExSRTP.ReplayList do
-  @moduledoc false
+  @moduledoc """
+  Module implementing a replay list for SRTP/SRTCP packets.
+  """
 
   import Bitwise
 

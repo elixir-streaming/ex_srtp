@@ -1,7 +1,5 @@
 defmodule ExSRTP.RTCPContext do
-  @moduledoc """
-  SRTP context state.
-  """
+  @moduledoc false
 
   import Bitwise
 
