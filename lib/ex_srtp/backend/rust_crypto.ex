@@ -22,7 +22,9 @@ defmodule ExSRTP.Backend.RustCrypto.Native do
 end
 
 defmodule ExSRTP.Backend.RustCrypto do
-  @moduledoc false
+  @moduledoc """
+  An `ExSRTP.Backend` implementation using Rust.
+  """
 
   @behaviour ExSRTP.Backend
 

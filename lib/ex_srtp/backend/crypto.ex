@@ -10,15 +10,15 @@ defmodule ExSRTP.Backend.Crypto do
   alias ExRTCP.CompoundPacket
   alias ExSRTP.{Cipher, Helper, RTCPContext, RTPContext}
 
-  @type t :: %__MODULE__{
-          cipher: ExSRTP.Cipher.t() | nil,
-          rtp_replay_window_size: non_neg_integer() | nil,
-          rtcp_replay_window_size: non_neg_integer() | nil,
-          out_rtp_contexts: %{non_neg_integer() => RTPContext.t()},
-          in_rtp_contexts: %{non_neg_integer() => RTPContext.t()},
-          out_rtcp_contexts: %{non_neg_integer() => RTCPContext.t()},
-          in_rtcp_contexts: %{non_neg_integer() => RTCPContext.t()}
-        }
+  @opaque t :: %__MODULE__{
+            cipher: ExSRTP.Cipher.t() | nil,
+            rtp_replay_window_size: non_neg_integer() | nil,
+            rtcp_replay_window_size: non_neg_integer() | nil,
+            out_rtp_contexts: %{non_neg_integer() => RTPContext.t()},
+            in_rtp_contexts: %{non_neg_integer() => RTPContext.t()},
+            out_rtcp_contexts: %{non_neg_integer() => RTCPContext.t()},
+            in_rtcp_contexts: %{non_neg_integer() => RTCPContext.t()}
+          }
 
   defstruct [
     :cipher,

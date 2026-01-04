@@ -1,7 +1,7 @@
 defmodule ExSRTP.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.4.0"
   @github_url "https://github.com/elixir-streaming/ex_srtp"
 
   def project do

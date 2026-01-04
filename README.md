@@ -46,7 +46,7 @@ The package can be installed by adding `ex_srtp` to your list of dependencies in
 def deps do
   [
     {:rustler, "~> 0.37", runtime: false} # Optional, if you want to compile the rust backend from source
-    {:ex_srtp, "~> 0.3.0"}
+    {:ex_srtp, "~> 0.4.0"}
   ]
 end
 ```
