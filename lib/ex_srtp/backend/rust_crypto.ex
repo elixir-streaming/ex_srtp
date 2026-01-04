@@ -16,6 +16,7 @@ defmodule ExSRTP.Backend.RustCrypto.Native do
       x86_64-pc-windows-gnu
       x86_64-unknown-linux-gnu
       x86_64-unknown-linux-musl
+      arm-unknown-linux-gnueabihf
     )
 
   def init(_policy), do: :erlang.nif_error(:nif_not_loaded)
