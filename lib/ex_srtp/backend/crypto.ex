@@ -52,7 +52,10 @@ defmodule ExSRTP.Backend.Crypto do
 
   @impl true
   def protect(%{ssrc: ssrc} = packet, session) do
-    ctx = :rtp_out |> get_ctx(session, packet.ssrc) |> RTPContext.inc_roc(packet.sequence_number)
+    ctx =
+      (session.out_rtp_contexts[packet.ssrc] || RTPContext.new())
+      |> RTPContext.inc_roc(packet.sequence_number)
+
     encrypted_packet = Cipher.encrypt_rtp(session.cipher, packet, ctx.roc)
     session = %{session | out_rtp_contexts: Map.put(session.out_rtp_contexts, ssrc, ctx)}
     {:ok, encrypted_packet, session}
@@ -62,7 +65,7 @@ defmodule ExSRTP.Backend.Crypto do
   def protect_rtcp(compound_packet, session) do
     # first rtcp packet must be SR or RR
     ssrc = List.first(compound_packet).ssrc
-    ctx = get_ctx(:rtcp_out, session, ssrc)
+    ctx = session.out_rtcp_contexts[ssrc] || RTCPContext.new()
 
     data = ExRTCP.CompoundPacket.encode(compound_packet)
     encrypted_data = Cipher.encrypt_rtcp(session.cipher, data, ctx.index)
@@ -78,7 +81,8 @@ defmodule ExSRTP.Backend.Crypto do
   @impl true
   def unprotect(data, session) do
     with {:ok, packet} <- ExRTP.Packet.decode(data),
-         ctx <- get_ctx(:rtp_in, session, packet.ssrc),
+         ctx <-
+           session.in_rtp_contexts[packet.ssrc] || RTPContext.new(session.rtp_replay_window_size),
          {roc, ctx} <- RTPContext.estimate_roc(ctx, packet.sequence_number),
          index <- roc <<< 16 ||| packet.sequence_number,
          {:ok, ctx} <- RTPContext.check_replay(ctx, index),
@@ -92,7 +96,7 @@ defmodule ExSRTP.Backend.Crypto do
   def unprotect_rtcp(data, session) do
     tag_size = Cipher.tag_size(session.cipher)
     {ssrc, index} = Helper.rtcp_index(tag_size, data)
-    ctx = get_ctx(:rtcp_in, session, ssrc)
+    ctx = session.in_rtcp_contexts[ssrc] || RTCPContext.new(session.rtcp_replay_window_size)
 
     with {:ok, ctx} <- RTCPContext.check_replay(ctx, index),
          {:ok, decrypted_data} <- Cipher.decrypt_rtcp(session.cipher, data),
@@ -105,28 +109,6 @@ defmodule ExSRTP.Backend.Crypto do
       {:ok, packets, session}
     end
   end
-
-  @compile {:inline, get_ctx: 3}
-  defp get_ctx(:rtp_out, %{out_rtp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
-    contexts[ssrc]
-  end
-
-  defp get_ctx(:rtp_in, %{in_rtp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
-    contexts[ssrc]
-  end
-
-  defp get_ctx(:rtcp_out, %{out_rtcp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
-    contexts[ssrc]
-  end
-
-  defp get_ctx(:rtcp_in, %{in_rtcp_contexts: contexts}, ssrc) when is_map_key(contexts, ssrc) do
-    contexts[ssrc]
-  end
-
-  defp get_ctx(:rtp_out, _session, _ssrc), do: RTPContext.new()
-  defp get_ctx(:rtcp_out, _session, _ssrc), do: RTCPContext.new()
-  defp get_ctx(:rtp_in, session, _ssrc), do: RTPContext.new(session.rtp_replay_window_size)
-  defp get_ctx(:rtcp_in, session, _ssrc), do: RTCPContext.new(session.rtcp_replay_window_size)
 
   defimpl Inspect do
     import Inspect.Algebra

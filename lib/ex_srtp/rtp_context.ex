@@ -5,8 +5,6 @@ defmodule ExSRTP.RTPContext do
 
   alias ExSRTP.ReplayList
 
-  @compile {:inline, inc_roc: 2, estimate_roc: 2}
-
   @max_roc 1 <<< 32
   @default_replay_window 64
 
