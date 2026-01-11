@@ -28,11 +28,8 @@ The library supports multiple backends for cryptographic operations:
 For the rust backend, we offer precompiled NIFs for various platforms, so if your platform is supported, you can use the rust backend without needing to compile anything. However, if your platform is not supported or you want to compile from source, you need to have the rust toolchain installed on your system. You need aslo to add `rustler` dependency and set force build config:
 
 ```elixir
+{:ex_srtp, "~> 0.4.0", system_env: %{"EXSRTP_BUILD" => "1"}}
 {:rustler, "~> 0.37.0"}
-```
-
-```elixir
-config :rust_precompiled, :force_build, ex_srtp: true
 ```
 
 ### Rust Backend and AES-GCM

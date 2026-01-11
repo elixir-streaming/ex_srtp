@@ -8,6 +8,7 @@ on:
 
 env:
   MIX_ENV: test
+  EXSRTP_BUILD: true
 
 jobs:
   test:
