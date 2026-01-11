@@ -28,7 +28,7 @@ The library supports multiple backends for cryptographic operations:
 For the rust backend, we offer precompiled NIFs for various platforms, so if your platform is supported, you can use the rust backend without needing to compile anything. However, if your platform is not supported or you want to compile from source, you need to have the rust toolchain installed on your system. You need aslo to add `rustler` dependency and set force build config:
 
 ```elixir
-{:ex_srtp, "~> 0.4.0", system_env: %{"EXSRTP_BUILD" => "1"}}
+{:ex_srtp, "~> 0.4.1", system_env: %{"EXSRTP_BUILD" => "1"}}
 {:rustler, "~> 0.37.0"}
 ```
 
@@ -43,7 +43,7 @@ The package can be installed by adding `ex_srtp` to your list of dependencies in
 def deps do
   [
     {:rustler, "~> 0.37", runtime: false} # Optional, if you want to compile the rust backend from source
-    {:ex_srtp, "~> 0.4.0"}
+    {:ex_srtp, "~> 0.4.1"}
   ]
 end
 ```
