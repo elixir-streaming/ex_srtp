@@ -31,7 +31,8 @@ defmodule ExSRTP.MixProject do
       {:ex_rtcp, "~> 0.4.0"},
       {:rustler, "~> 0.37", runtime: false, optional: true},
       {:rustler_precompiled, "~> 0.8"},
-      {:ex_doc, "~> 0.30", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.30", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 

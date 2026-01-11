@@ -168,9 +168,7 @@ defmodule ExSRTPTest do
           156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
           139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
 
-      assert {:ok, unprotected_packets, _srtp} =
-               ExSRTP.Backend.RustCrypto.unprotect_rtcp(protected_rtcp, srtp)
-
+      assert {:ok, unprotected_packets, _srtp} = RustCrypto.unprotect_rtcp(protected_rtcp, srtp)
       assert unprotected_packets == packets
     end
 
@@ -280,7 +278,7 @@ defmodule ExSRTPTest do
       end
 
       test "protect and unprotect", %{srtp: srtp, rust_srtp: rust_srtp} do
-        original_packets = packets(10000)
+        original_packets = packets(10_000)
 
         {encrypted_packets, rust_srtp} =
           Enum.map_reduce(original_packets, rust_srtp, fn pkt, srtp ->
@@ -388,7 +386,7 @@ defmodule ExSRTPTest do
     |> Enum.take(size)
   end
 
-  defp rand_payload() do
+  defp rand_payload do
     len = :rand.uniform(1000) + 500
     :crypto.strong_rand_bytes(len)
   end

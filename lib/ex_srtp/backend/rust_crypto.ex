@@ -7,6 +7,7 @@ defmodule ExSRTP.Backend.RustCrypto.Native do
     crate: "ex_srtp",
     base_url: "https://github.com/elixir-streaming/ex_srtp/releases/download/v#{version}",
     version: version,
+    force_build: System.get_env("EXSRTP_BUILD") in ["1", "true"],
     targets: ~w(
       aarch64-apple-darwin
       aarch64-unknown-linux-gnu
