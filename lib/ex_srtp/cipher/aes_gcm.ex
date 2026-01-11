@@ -1,5 +1,6 @@
 defmodule ExSRTP.Cipher.AesGcm do
   @moduledoc """
+  An `ExSRTP.Cipher` implementation using AES-GCM (as per RFC 7714).
   """
 
   import Bitwise
