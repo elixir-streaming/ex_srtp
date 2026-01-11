@@ -86,22 +86,21 @@ defmodule ExSRTPTest do
   end
 
   describe "protect rtcp" do
-    test "Erlnag backend", %{srtp: srtp, compound_packet: compound_packet} do
+    setup do
       expected =
         <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
           156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
           139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
 
+      {:ok, expected: expected}
+    end
+
+    test "Erlnag backend", %{srtp: srtp, compound_packet: compound_packet, expected: expected} do
       assert {:ok, ^expected, _srtp} = ExSRTP.protect_rtcp(compound_packet, srtp)
       assert {^expected, _srtp} = ExSRTP.protect_rtcp!(compound_packet, srtp)
     end
 
-    test "Rust backend", %{rust_srtp: srtp, compound_packet: compound_packet} do
-      expected =
-        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
-          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
-          139, 226, 152, 17, 40, 71, 251, 110, 11, 235>>
-
+    test "Rust backend", %{rust_srtp: srtp, compound_packet: compound_packet, expected: expected} do
       assert {:ok, ^expected, _srtp} = RustCrypto.protect_rtcp(compound_packet, srtp)
     end
   end
@@ -136,6 +135,15 @@ defmodule ExSRTPTest do
 
       assert {:ok, ^packet, srtp} = RustCrypto.unprotect(protected_packet, srtp)
       assert {:error, :replay} = RustCrypto.unprotect(protected_packet, srtp)
+    end
+
+    test "authentication failed", %{srtp: srtp, rust_srtp: rust_srtp} do
+      packet =
+        <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146, 221, 94, 142, 7, 197, 169, 172,
+          155, 23, 74, 128, 181, 142, 46>>
+
+      assert {:error, :authentication_failed} = ExSRTP.unprotect(packet, srtp)
+      assert {:error, :authentication_failed} = RustCrypto.unprotect(packet, rust_srtp)
     end
   end
 
@@ -184,6 +192,18 @@ defmodule ExSRTPTest do
       assert_raise RuntimeError, "Failed to unprotect RTCP packets: :replay", fn ->
         ExSRTP.unprotect_rtcp!(protected_rtcp, srtp)
       end
+    end
+
+    test "authentication failed", %{srtp: srtp, rust_srtp: rust_srtp} do
+      protected_rtcp =
+        <<128, 200, 0, 6, 137, 161, 255, 135, 235, 3, 169, 113, 236, 134, 217, 36, 127, 210, 78,
+          156, 66, 244, 203, 218, 58, 80, 24, 60, 28, 171, 30, 89, 192, 155, 19, 59, 128, 0, 0, 1,
+          139, 226, 152, 17, 40, 70, 251, 110, 11, 235>>
+
+      assert {:error, :authentication_failed} = ExSRTP.unprotect_rtcp(protected_rtcp, srtp)
+
+      assert {:error, :authentication_failed} =
+               RustCrypto.unprotect_rtcp(protected_rtcp, rust_srtp)
     end
   end
 

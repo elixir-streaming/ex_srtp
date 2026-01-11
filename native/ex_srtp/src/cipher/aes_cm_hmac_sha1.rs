@@ -1,6 +1,7 @@
 use aes::cipher::{KeyIvInit, StreamCipher};
 use hmac::Mac;
 use rustler::OwnedBinary;
+use subtle::ConstantTimeEq;
 
 use crate::{
     cipher::Cipher, key_derivation::aes_cm_key_derivation, protection_profile::ProtectionProfile,
@@ -101,16 +102,18 @@ impl Cipher for AesCmHmacSha1Cipher {
         roc: u32,
     ) -> Result<OwnedBinary, String> {
         let (encrypted_data, auth_tag) = payload.split_at(payload.len() - self.profile.tag_size());
-        let expected_tag =
-            self.generate_rtp_auth_tag(&[&header[..], &encrypted_data[..], &roc.to_be_bytes()[..]]);
+        let expected_tag = &self.generate_rtp_auth_tag(&[
+            &header[..],
+            &encrypted_data[..],
+            &roc.to_be_bytes()[..],
+        ]);
 
-        if auth_tag != expected_tag.as_slice() {
+        if auth_tag.ct_eq(expected_tag).unwrap_u8() != 1 {
             return Err("authentication_failed".to_string());
         }
 
         let size = payload.len() - self.profile.tag_size();
         let mut owned_binary = OwnedBinary::new(size).unwrap();
-        // owned_binary.as_mut_slice()[..header.len()].copy_from_slice(header);
         owned_binary
             .as_mut_slice()
             .copy_from_slice(&payload[..payload.len() - self.profile.tag_size()]);
@@ -148,8 +151,8 @@ impl Cipher for AesCmHmacSha1Cipher {
         let tag_size = self.profile.tag_size();
         let (data, auth_tag) = compound_packet.split_at(compound_packet.len() - tag_size);
 
-        let expected_tag = self.generate_rtcp_auth_tag(data);
-        if auth_tag != expected_tag.as_slice() {
+        let expected_tag = &self.generate_rtcp_auth_tag(data);
+        if auth_tag.ct_eq(expected_tag).unwrap_u8() != 1 {
             return Err("authentication_failed".to_string());
         }
 
