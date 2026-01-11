@@ -98,7 +98,7 @@ fn unprotect<'a>(
     state: ResourceArc<State>,
     header: Binary<'a>,
     payload: Binary<'a>,
-) -> Result<Binary<'a>, String> {
+) -> Result<Binary<'a>, Atom> {
     let mut session = state.session.lock().unwrap();
     let ssrc = u32::from_be_bytes(header.as_slice()[8..12].try_into().unwrap());
     let seq = u16::from_be_bytes(header.as_slice()[2..4].try_into().unwrap());
@@ -109,13 +109,16 @@ fn unprotect<'a>(
         .or_insert_with(|| RTPContext::default());
 
     let roc = ctx.estimate_roc(seq);
-
-    let owned = session
+    match session
         .cipher
-        .decrypt_rtp(&header.as_slice(), &payload.as_slice(), roc)?;
-
-    session.in_rtp_ctx.get_mut(&ssrc).unwrap().update_roc(seq);
-    return Ok(Binary::from_owned(owned, env));
+        .decrypt_rtp(&header.as_slice(), &payload.as_slice(), roc)
+    {
+        Err(err) => Err(Atom::from_str(env, err.as_str()).unwrap()),
+        Ok(owned) => {
+            session.in_rtp_ctx.get_mut(&ssrc).unwrap().update_roc(seq);
+            Ok(Binary::from_owned(owned, env))
+        }
+    }
 }
 
 #[rustler::nif]
@@ -123,10 +126,12 @@ fn unprotect_rtcp<'a>(
     env: Env<'a>,
     state: ResourceArc<State>,
     data: Binary<'a>,
-) -> Result<Binary<'a>, String> {
+) -> Result<Binary<'a>, Atom> {
     let mut session = state.session.lock().unwrap();
-    let owned = session.cipher.decrypt_rtcp(&data.as_slice())?;
-    return Ok(Binary::from_owned(owned, env));
+    match session.cipher.decrypt_rtcp(&data.as_slice()) {
+        Err(err) => return Err(Atom::from_str(env, err.as_str()).unwrap()),
+        Ok(owned) => Ok(Binary::from_owned(owned, env)),
+    }
 }
 
 #[rustler::nif]

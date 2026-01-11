@@ -78,9 +78,9 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
       header_size = byte_size(data) - byte_size(packet.payload)
 
       <<encrypted_data::binary-size(byte_size(data) - tag_size), tag::binary>> = data
-      new_tag = generate_srtp_auth_tag(cipher, encrypted_data, roc)
+      expected_tag = generate_srtp_auth_tag(cipher, encrypted_data, roc)
 
-      if tag == new_tag do
+      if :crypto.hash_equals(tag, expected_tag) do
         idx = packet.ssrc <<< 48 ||| roc <<< 16 ||| packet.sequence_number
         iv = bxor(cipher.rtp_salt, idx <<< 16)
 
@@ -95,7 +95,7 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
 
         {:ok, %{packet | payload: payload}}
       else
-        {:error, :auth_failed}
+        {:error, :authentication_failed}
       end
     end
 
@@ -119,10 +119,11 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
 
       <<rtcp_data::binary-size(authenticated_data_size - 4), e::1, index::31, tag::binary>> = data
 
-      new_tag = generate_srtcp_auth_tag(cipher, binary_part(data, 0, authenticated_data_size))
+      expected_tag =
+        generate_srtcp_auth_tag(cipher, binary_part(data, 0, authenticated_data_size))
 
       cond do
-        new_tag != tag ->
+        not :crypto.hash_equals(tag, expected_tag) ->
           {:error, :authentication_failed}
 
         e == 0 ->

@@ -97,6 +97,7 @@ dependencies = [
  "hmac",
  "rustler",
  "sha1",
+ "subtle",
 ]
 
 [[package]]
