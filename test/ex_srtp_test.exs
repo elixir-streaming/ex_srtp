@@ -145,6 +145,11 @@ defmodule ExSRTPTest do
       assert {:error, :authentication_failed} = ExSRTP.unprotect(packet, srtp)
       assert {:error, :authentication_failed} = RustCrypto.unprotect(packet, rust_srtp)
     end
+
+    test "short packets", %{rust_srtp: rust_srtp} do
+      packet = <<128, 96, 0, 1, 0, 1, 226, 64, 137, 161, 255, 135, 146>>
+      assert {:error, :not_enough_data} = RustCrypto.unprotect(packet, rust_srtp)
+    end
   end
 
   describe "unprotect rtcp" do
@@ -204,6 +209,11 @@ defmodule ExSRTPTest do
 
       assert {:error, :authentication_failed} =
                RustCrypto.unprotect_rtcp(protected_rtcp, rust_srtp)
+    end
+
+    test "short packets", %{rust_srtp: rust_srtp} do
+      packet = <<128, 200, 0, 6, 137, 161, 255, 135, 235>>
+      assert {:error, :not_enough_data} = RustCrypto.unprotect_rtcp(packet, rust_srtp)
     end
   end
 

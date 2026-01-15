@@ -95,10 +95,11 @@ defmodule ExSRTP.Backend.Crypto do
   @impl true
   def unprotect_rtcp(data, session) do
     tag_size = Cipher.tag_size(session.cipher)
-    {ssrc, index} = Helper.rtcp_index(tag_size, data)
-    ctx = session.in_rtcp_contexts[ssrc] || RTCPContext.new(session.rtcp_replay_window_size)
 
-    with {:ok, ctx} <- RTCPContext.check_replay(ctx, index),
+    with {:ok, ssrc, index} <- Helper.rtcp_index(tag_size, data),
+         ctx <-
+           session.in_rtcp_contexts[ssrc] || RTCPContext.new(session.rtcp_replay_window_size),
+         {:ok, ctx} <- RTCPContext.check_replay(ctx, index),
          {:ok, decrypted_data} <- Cipher.decrypt_rtcp(session.cipher, data),
          {:ok, packets} <- CompoundPacket.decode(decrypted_data) do
       session = %{

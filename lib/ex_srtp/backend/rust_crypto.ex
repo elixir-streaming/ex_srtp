@@ -121,12 +121,9 @@ defmodule ExSRTP.Backend.RustCrypto do
         :aes_gcm_128_16_auth -> 0
       end
 
-    {ssrc, index} = ExSRTP.Helper.rtcp_index(tag_size, protected_packet)
-
-    replay_list =
-      session.rtcp_replay_list[ssrc] || ReplayList.new(session.rtcp_replay_window_size)
-
-    with {:ok, replay_list} <- ReplayList.check_and_update(replay_list, index),
+    with {:ok, ssrc, index} <- ExSRTP.Helper.rtcp_index(tag_size, protected_packet),
+         replay_list <- rtcp_replay_list(session, ssrc),
+         {:ok, replay_list} <- ReplayList.check_and_update(replay_list, index),
          {:ok, unprotected_data} <- Native.unprotect_rtcp(native, protected_packet),
          {:ok, packets} <- CompoundPacket.decode(unprotected_data) do
       session = %{
@@ -136,5 +133,9 @@ defmodule ExSRTP.Backend.RustCrypto do
 
       {:ok, packets, session}
     end
+  end
+
+  defp rtcp_replay_list(session, ssrc) do
+    session.rtcp_replay_list[ssrc] || ReplayList.new(session.rtcp_replay_window_size)
   end
 end
