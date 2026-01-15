@@ -1,6 +1,7 @@
 use rustler::OwnedBinary;
 
 const RTCP_INDEX_SIZE: usize = 4;
+const RTCP_HEADER_SIZE: usize = 8;
 
 use crate::{
     cipher::Cipher, key_derivation::aes_cm_key_derivation, protection_profile::ProtectionProfile,
@@ -80,6 +81,10 @@ impl Cipher for AesGcmCipher {
         payload: &[u8],
         roc: u32,
     ) -> Result<rustler::OwnedBinary, String> {
+        if payload.len() < self.profile.tag_size() {
+            return Err("not_enough_data".to_string());
+        }
+
         let tag_size = self.profile.tag_size();
         let mut owned_binary = OwnedBinary::new(payload.len() - tag_size).unwrap();
         let slice = owned_binary.as_mut_slice();
@@ -100,22 +105,23 @@ impl Cipher for AesGcmCipher {
 
     fn encrypt_rtcp(&mut self, compound_packet: &[u8], index: u32) -> OwnedBinary {
         let ssrc = u32::from_be_bytes(compound_packet[4..8].try_into().unwrap());
-        let size = compound_packet.len() + self.profile.tag_size() + 4;
+        let size = compound_packet.len() + self.profile.tag_size() + RTCP_INDEX_SIZE;
 
         let mut owned_binary = OwnedBinary::new(size).unwrap();
         owned_binary.as_mut_slice()[..compound_packet.len()].copy_from_slice(compound_packet);
 
-        let (header, remaining) = owned_binary.as_mut_slice().split_at_mut(8);
-        let (plain_text, remaining) = remaining.split_at_mut(compound_packet.len() - 8);
+        let (header, remaining) = owned_binary.as_mut_slice().split_at_mut(RTCP_HEADER_SIZE);
+        let (plain_text, remaining) =
+            remaining.split_at_mut(compound_packet.len() - RTCP_HEADER_SIZE);
         let (auth_tag, index_bytes) = remaining.split_at_mut(self.profile.tag_size());
 
         index_bytes.copy_from_slice(&index.to_be_bytes());
         index_bytes[0] |= 0x80;
 
         let iv = self.rtcp_initialization_vector(ssrc, index);
-        let mut aad = Vec::<u8>::with_capacity(12);
-        aad.extend_from_slice(&header);
-        aad.extend_from_slice(&index_bytes);
+        let mut aad = [0; 12];
+        aad[..RTCP_HEADER_SIZE].copy_from_slice(&header);
+        aad[RTCP_HEADER_SIZE..].copy_from_slice(index_bytes);
 
         self.rtcp_c
             .encrypt(&iv, &aad, plain_text, auth_tag.try_into().unwrap());
@@ -124,6 +130,10 @@ impl Cipher for AesGcmCipher {
     }
 
     fn decrypt_rtcp(&mut self, compound_packet: &[u8]) -> Result<OwnedBinary, String> {
+        if compound_packet.len() < self.profile.tag_size() + RTCP_INDEX_SIZE + RTCP_HEADER_SIZE {
+            return Err("not_enough_data".to_string());
+        }
+
         let ssrc = u32::from_be_bytes(compound_packet[4..8].try_into().unwrap());
         let tag_size = self.profile.tag_size();
         let size = compound_packet.len() - tag_size - RTCP_INDEX_SIZE;
@@ -133,7 +143,7 @@ impl Cipher for AesGcmCipher {
             .as_mut_slice()
             .copy_from_slice(&compound_packet[..size]);
 
-        let (header, cipher_text) = owned_binary.as_mut_slice().split_at_mut(8);
+        let (header, cipher_text) = owned_binary.as_mut_slice().split_at_mut(RTCP_HEADER_SIZE);
         let auth_tag = &compound_packet[size..size + tag_size];
         let index_bytes = &compound_packet[compound_packet.len() - RTCP_INDEX_SIZE..];
 
@@ -141,9 +151,9 @@ impl Cipher for AesGcmCipher {
         index &= 0x7FFFFFFF;
 
         let iv = self.rtcp_initialization_vector(ssrc, index);
-        let mut aad = Vec::<u8>::with_capacity(12);
-        aad.extend_from_slice(&header);
-        aad.extend_from_slice(&index_bytes);
+        let mut aad = [0; 12];
+        aad[..RTCP_HEADER_SIZE].copy_from_slice(&header);
+        aad[RTCP_HEADER_SIZE..].copy_from_slice(index_bytes);
 
         self.rtcp_c
             .decrypt(&iv, &aad, cipher_text, auth_tag)

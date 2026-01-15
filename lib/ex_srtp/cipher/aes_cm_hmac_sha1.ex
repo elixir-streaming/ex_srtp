@@ -75,12 +75,11 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
 
     def decrypt_rtp(cipher, data, packet, roc) do
       tag_size = tag_size(cipher)
-      header_size = byte_size(data) - byte_size(packet.payload)
-
       <<encrypted_data::binary-size(byte_size(data) - tag_size), tag::binary>> = data
       expected_tag = generate_srtp_auth_tag(cipher, encrypted_data, roc)
 
       if :crypto.hash_equals(tag, expected_tag) do
+        header_size = byte_size(data) - byte_size(packet.payload)
         idx = packet.ssrc <<< 48 ||| roc <<< 16 ||| packet.sequence_number
         iv = bxor(cipher.rtp_salt, idx <<< 16)
 
@@ -146,6 +145,7 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
       end
     end
 
+    @compile {:inline, generate_srtp_auth_tag: 3}
     defp generate_srtp_auth_tag(cipher, data, roc) do
       :crypto.macN(
         :hmac,
@@ -160,6 +160,7 @@ defmodule ExSRTP.Cipher.AesCmHmacSha1 do
       :crypto.macN(:hmac, :sha, cipher.rtcp_auth_key, data, tag_size(cipher))
     end
 
+    @compile {:inline, tag_size: 1}
     def tag_size(%{profile: :aes_cm_128_hmac_sha1_80}), do: 10
     def tag_size(%{profile: :aes_cm_128_hmac_sha1_32}), do: 4
   end

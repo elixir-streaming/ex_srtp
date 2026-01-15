@@ -8,6 +8,9 @@ use crate::{
     Aes128Ctr, HmacSha1,
 };
 
+const RTCP_INDEX_SIZE: usize = 4;
+const RTCP_HEADER_SIZE: usize = 8;
+
 pub(crate) struct AesCmHmacSha1Cipher {
     profile: ProtectionProfile,
     rtp_session_key: Vec<u8>,
@@ -101,6 +104,10 @@ impl Cipher for AesCmHmacSha1Cipher {
         payload: &[u8],
         roc: u32,
     ) -> Result<OwnedBinary, String> {
+        if payload.len() < self.profile.tag_size() {
+            return Err("not_enough_data".to_string());
+        }
+
         let (encrypted_data, auth_tag) = payload.split_at(payload.len() - self.profile.tag_size());
         let expected_tag = &self.generate_rtp_auth_tag(&[
             &header[..],
@@ -130,25 +137,31 @@ impl Cipher for AesCmHmacSha1Cipher {
         let mut index_bytes = index.to_be_bytes();
         index_bytes[0] |= 0x80;
 
-        let size = compound_packet.len() + self.profile.tag_size() + 4;
+        let size = compound_packet.len() + self.profile.tag_size() + RTCP_INDEX_SIZE;
         let mut owned_binary = OwnedBinary::new(size).unwrap();
         let slice = owned_binary.as_mut_slice();
 
         slice[..compound_packet.len()].copy_from_slice(compound_packet);
-        slice[compound_packet.len()..compound_packet.len() + 4].copy_from_slice(&index_bytes);
+        slice[compound_packet.len()..compound_packet.len() + RTCP_INDEX_SIZE]
+            .copy_from_slice(&index_bytes);
 
         let iv = Self::rtcp_initialization_vector(&self.rtcp_salt, ssrc, index);
         Aes128Ctr::new(self.rtcp_session_key.as_slice().into(), &iv.into())
-            .apply_keystream(&mut slice[8..compound_packet.len()]);
+            .apply_keystream(&mut slice[RTCP_HEADER_SIZE..compound_packet.len()]);
 
-        let auth_tag = self.generate_rtcp_auth_tag(&slice[..compound_packet.len() + 4]);
+        let auth_tag =
+            self.generate_rtcp_auth_tag(&slice[..compound_packet.len() + RTCP_INDEX_SIZE]);
 
-        slice[compound_packet.len() + 4..].copy_from_slice(&auth_tag);
-        return owned_binary;
+        slice[compound_packet.len() + RTCP_INDEX_SIZE..].copy_from_slice(&auth_tag);
+        owned_binary
     }
 
     fn decrypt_rtcp(&mut self, compound_packet: &[u8]) -> Result<OwnedBinary, String> {
         let tag_size = self.profile.tag_size();
+        if compound_packet.len() < tag_size + RTCP_HEADER_SIZE + RTCP_INDEX_SIZE {
+            return Err("not_enough_data".to_string());
+        }
+
         let (data, auth_tag) = compound_packet.split_at(compound_packet.len() - tag_size);
 
         let expected_tag = &self.generate_rtcp_auth_tag(data);
@@ -156,8 +169,8 @@ impl Cipher for AesCmHmacSha1Cipher {
             return Err("authentication_failed".to_string());
         }
 
-        let (header, rest) = data.split_at(8);
-        let (encrypted_data, index_bytes) = rest.split_at(rest.len() - 4);
+        let (header, rest) = data.split_at(RTCP_HEADER_SIZE);
+        let (encrypted_data, index_bytes) = rest.split_at(rest.len() - RTCP_INDEX_SIZE);
         let ssrc = u32::from_be_bytes(header[4..8].try_into().unwrap());
         let mut index = u32::from_be_bytes(index_bytes.try_into().unwrap());
 
@@ -171,12 +184,12 @@ impl Cipher for AesCmHmacSha1Cipher {
 
         let size = header.len() + encrypted_data.len();
         let mut owned_binary = OwnedBinary::new(size).unwrap();
-        owned_binary.as_mut_slice()[..header.len()].copy_from_slice(header);
-        owned_binary.as_mut_slice()[header.len()..].copy_from_slice(encrypted_data);
+        owned_binary.as_mut_slice()[..RTCP_HEADER_SIZE].copy_from_slice(header);
+        owned_binary.as_mut_slice()[RTCP_HEADER_SIZE..].copy_from_slice(encrypted_data);
 
         let iv = Self::rtcp_initialization_vector(&self.rtcp_salt, ssrc, index);
         Aes128Ctr::new(self.rtcp_session_key.as_slice().into(), &iv.into())
-            .apply_keystream(&mut owned_binary.as_mut_slice()[header.len()..]);
+            .apply_keystream(&mut owned_binary.as_mut_slice()[RTCP_HEADER_SIZE..]);
 
         Ok(owned_binary)
     }
